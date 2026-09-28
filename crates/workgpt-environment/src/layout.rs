@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 /// verification to reject, rather than falling back to another installation.
 pub fn installed_desktop_runtime_directory(executable: &Path) -> Option<PathBuf> {
     #[cfg(target_os = "macos")]
-    if executable.starts_with("/Applications/WorkGPT Desktop.app/Contents/MacOS") {
+    if executable.starts_with("/Applications/WorkGPT.app/Contents/MacOS")
+        || executable.starts_with("/Applications/WorkGPT Desktop.app/Contents/MacOS")
+    {
         let directory = PathBuf::from("/Library/Application Support/WorkGPT/runtime");
         if directory.is_dir() {
             return Some(directory);

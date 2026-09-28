@@ -24,6 +24,7 @@ pub struct TunnelRuntimeObservation {
     pub ready: bool,
     pub tunnel_ready: bool,
     pub local_mcp_ready: bool,
+    pub service_pid: Option<u32>,
 }
 fn diagnostic(code: &str, message: &str) -> SetupDiagnostic {
     SetupDiagnostic::new(code, message, "Inspect the saved Tunnel profile and its system service; keep its original Tunnel ID and API credential")
@@ -266,18 +267,19 @@ impl NativeEnvironment {
             .ok_or_else(|| diagnostic("not_configured", "Configure this environment first"))?;
         let spec = tunnel_service_spec(store, &record, profile_id)?;
         let service_status = ServiceManager::inspect(&spec).map_err(service_error)?;
-        let (tunnel_ready, local_mcp_ready) = if service_status.ownership == Ownership::Owned
+        let (tunnel_ready, local_mcp_ready, service_pid) = if service_status.ownership == Ownership::Owned
             && service_status.running == Some(true)
         {
-            read_health(&spec.working_directory.join("readiness.json")).unwrap_or((false, false))
+            read_health(&spec.working_directory.join("readiness.json")).unwrap_or((false, false, None))
         } else {
-            (false, false)
+            (false, false, None)
         };
         Ok(TunnelRuntimeObservation {
             service_status,
             ready: tunnel_ready && local_mcp_ready,
             tunnel_ready,
             local_mcp_ready,
+            service_pid,
         })
     }
     pub async fn remove_tunnel(
@@ -447,7 +449,7 @@ pub(crate) async fn wait_tunnel_readiness(spec: &ServiceSpec) -> SetupResultValu
         }
         if status.running == Some(true) {
             let value = read_health(&path);
-            if value.is_ok_and(|(tunnel, mcp)| tunnel && mcp) {
+            if value.is_ok_and(|(tunnel, mcp, _)| tunnel && mcp) {
                 return Ok(());
             }
         }
@@ -460,7 +462,7 @@ pub(crate) async fn wait_tunnel_readiness(spec: &ServiceSpec) -> SetupResultValu
         .await;
     }
 }
-fn read_health(path: &std::path::Path) -> SetupResultValue<(bool, bool)> {
+fn read_health(path: &std::path::Path) -> SetupResultValue<(bool, bool, Option<u32>)> {
     use std::io::Read;
     let meta = std::fs::symlink_metadata(path).map_err(|_| SetupDiagnostic::io())?;
     if !meta.is_file() || meta.is_symlink() || meta.len() > 4096 {
@@ -485,6 +487,15 @@ fn read_health(path: &std::path::Path) -> SetupResultValue<(bool, bool)> {
         .and_then(serde_json::Value::as_u64)
         .unwrap_or(0) as u128;
     let fresh = time <= now && now.saturating_sub(time) < 7000;
+    let pid = if fresh {
+        value
+            .get("service_pid")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|p| u32::try_from(p).ok())
+            .filter(|&p| p > 0)
+    } else {
+        None
+    };
     Ok((
         fresh
             && value
@@ -496,6 +507,7 @@ fn read_health(path: &std::path::Path) -> SetupResultValue<(bool, bool)> {
                 .get("local_mcp_ready")
                 .and_then(serde_json::Value::as_bool)
                 == Some(true),
+        pid,
     ))
 }
 

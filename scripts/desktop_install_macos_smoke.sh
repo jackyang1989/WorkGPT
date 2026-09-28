@@ -56,8 +56,11 @@ trap cleanup EXIT INT TERM
 
 hdiutil attach -readonly -nobrowse -mountpoint "$mount_point" "$dmg" >/dev/null
 attached=1
-app="$mount_point/WorkGPT Desktop.app"
-[ -d "$app/Contents" ] || { echo "WorkGPT Desktop.app is missing from DMG" >&2; exit 1; }
+app="$mount_point/WorkGPT.app"
+if [ ! -d "$app/Contents" ]; then
+  app="$mount_point/WorkGPT Desktop.app"
+fi
+[ -d "$app/Contents" ] || { echo "WorkGPT.app is missing from DMG" >&2; exit 1; }
 runtime_dir="$app/Contents/Resources/workgpt-runtime"
 [ -d "$runtime_dir" ] || { echo "bundled WorkGPT runtime directory is missing" >&2; exit 1; }
 

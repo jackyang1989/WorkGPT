@@ -192,7 +192,7 @@ impl DesktopCore {
                                 .ok()
                         });
                 let runtime = &mut profile.runtime;
-                runtime.pid = None;
+                runtime.pid = status.as_ref().and_then(|status| status.service_pid);
                 runtime.tunnel_client_pid = None;
                 runtime.process_started = status
                     .as_ref()

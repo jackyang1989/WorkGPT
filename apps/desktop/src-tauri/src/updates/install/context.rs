@@ -110,10 +110,8 @@ fn aligned_release_build(build: &MachineBuildInfo, binaries: &ResolvedBinaries) 
 fn package_layout(target: InstallerTarget, executable: &Path, runtime: &Path) -> bool {
     #[cfg(target_os = "macos")]
     {
-        executable.parent()
-            == Some(Path::new(
-                "/Applications/WorkGPT Desktop.app/Contents/MacOS",
-            ))
+        (executable.parent() == Some(Path::new("/Applications/WorkGPT.app/Contents/MacOS"))
+            || executable.parent() == Some(Path::new("/Applications/WorkGPT Desktop.app/Contents/MacOS")))
             && runtime == Path::new("/Library/Application Support/WorkGPT/runtime")
             && Path::new("/var/db/receipts/dev.workgpt.unified-installer.plist").is_file()
     }

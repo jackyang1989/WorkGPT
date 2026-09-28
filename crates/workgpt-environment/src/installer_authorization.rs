@@ -99,7 +99,13 @@ pub fn verify_installer_targets(
         .then(|| PathBuf::from("/usr/lib/workgpt/workgpt-desktop"));
     #[cfg(target_os = "macos")]
     let desktop = (directory == Path::new("/Library/Application Support/WorkGPT/runtime"))
-        .then(|| PathBuf::from("/Applications/WorkGPT Desktop.app"));
+        .then(|| {
+            if Path::new("/Applications/WorkGPT.app").exists() {
+                PathBuf::from("/Applications/WorkGPT.app")
+            } else {
+                PathBuf::from("/Applications/WorkGPT Desktop.app")
+            }
+        });
     #[cfg(windows)]
     let desktop = (directory.file_name().and_then(|name| name.to_str()) == Some("workgpt-runtime"))
         .then(|| directory.parent().unwrap().join("WorkGPT.exe"));

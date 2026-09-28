@@ -131,7 +131,13 @@ fn managed_desktop_target(binaries: &RuntimeBinaries) -> Option<PathBuf> {
     #[cfg(target_os = "macos")]
     {
         (runtime == Path::new("/Library/Application Support/WorkGPT/runtime"))
-            .then(|| PathBuf::from("/Applications/WorkGPT Desktop.app"))
+            .then(|| {
+                if Path::new("/Applications/WorkGPT.app").exists() {
+                    PathBuf::from("/Applications/WorkGPT.app")
+                } else {
+                    PathBuf::from("/Applications/WorkGPT Desktop.app")
+                }
+            })
     }
     #[cfg(windows)]
     {
@@ -1233,7 +1239,11 @@ pub async fn verify_same_installed_package(
     #[cfg(target_os = "linux")]
     let desktop_target = PathBuf::from("/usr/lib/workgpt/workgpt-desktop");
     #[cfg(target_os = "macos")]
-    let desktop_target = PathBuf::from("/Applications/WorkGPT Desktop.app");
+    let desktop_target = if Path::new("/Applications/WorkGPT.app").exists() {
+        PathBuf::from("/Applications/WorkGPT.app")
+    } else {
+        PathBuf::from("/Applications/WorkGPT Desktop.app")
+    };
     #[cfg(windows)]
     let desktop_target = expected_runtime_dir
         .parent()

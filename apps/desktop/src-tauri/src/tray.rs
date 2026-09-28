@@ -152,7 +152,7 @@ pub fn setup(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let menu = build_menu(app, &projection)?;
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .menu(&menu)
-        .tooltip("WorkGPT Desktop")
+        .tooltip("WorkGPT")
         .icon_as_template(cfg!(target_os = "macos"))
         .show_menu_on_left_click(cfg!(target_os = "macos"))
         .on_menu_event(|app, event| handle_menu_event(app, event.id().as_ref()))
