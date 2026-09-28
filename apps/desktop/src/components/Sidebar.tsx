@@ -26,7 +26,7 @@ export function Sidebar({ state, navigation, setNavigation }: { state: DesktopSt
   const hasLocalRunner = state.topology?.runner?.kind !== "none";
   return (
       <aside className="sidebar">
-        <div className="brand"><BrandMark /><div><strong>WorkGPT</strong><span>Desktop</span></div></div>
+        <div className="brand"><BrandMark /><div><strong>WorkGPT</strong></div></div>
         <nav aria-label={t("nav.main")}>
           {NAVIGATION_GROUPS.map((group) => (
             <section className="nav-group" key={group.label} aria-label={t(group.label)}>

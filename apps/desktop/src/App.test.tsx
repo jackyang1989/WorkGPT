@@ -683,7 +683,7 @@ beforeEach(() => {
     act(() => {
       tauriEvents.handler?.({ payload: "settings" });
     });
-    expect(await screen.findByRole("heading", { level: 1, name: "Desktop 设置" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "设置" })).toBeInTheDocument();
 
     act(() => {
       tauriEvents.handler?.({ payload: "activity" });
@@ -957,7 +957,7 @@ beforeEach(() => {
         await vi.advanceTimersByTimeAsync(1_500);
       });
 
-      const operationStatus = screen.getByRole("status", { name: "当前 Desktop 操作" });
+      const operationStatus = screen.getByRole("status", { name: "当前 WorkGPT 操作" });
       expect(operationStatus).toHaveTextContent("正在配置本机 WorkGPT");
       expect(operationStatus).toHaveTextContent("停止当前操作不会自动重复执行尚未确认的步骤");
 
@@ -975,7 +975,7 @@ beforeEach(() => {
         await Promise.resolve();
         await Promise.resolve();
       });
-      expect(screen.queryByRole("status", { name: "当前 Desktop 操作" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("status", { name: "当前 WorkGPT 操作" })).not.toBeInTheDocument();
       view.unmount();
     } finally {
       vi.useRealTimers();
@@ -995,7 +995,7 @@ beforeEach(() => {
     await waitFor(() => {
       expect(api.cancelOperation).toHaveBeenCalledWith("desktop-operation-a");
     });
-    const cancellingStatus = screen.getByRole("status", { name: "当前 Desktop 操作" });
+    const cancellingStatus = screen.getByRole("status", { name: "当前 WorkGPT 操作" });
     expect(cancellingStatus).toHaveTextContent("正在停止当前操作…");
     const disabledCancel = screen.getByRole("button", { name: "正在停止当前操作…" });
     expect(disabledCancel).toBeDisabled();
@@ -1020,7 +1020,7 @@ beforeEach(() => {
         await Promise.resolve();
         await Promise.resolve();
       });
-      expect(screen.getByRole("status", { name: "当前 Desktop 操作" })).toBeInTheDocument();
+      expect(screen.getByRole("status", { name: "当前 WorkGPT 操作" })).toBeInTheDocument();
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1_000);
@@ -1032,14 +1032,14 @@ beforeEach(() => {
         await Promise.resolve();
         await Promise.resolve();
       });
-      expect(screen.queryByRole("status", { name: "当前 Desktop 操作" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("status", { name: "当前 WorkGPT 操作" })).not.toBeInTheDocument();
 
       stalePoll.resolve(running);
       await act(async () => {
         await Promise.resolve();
         await Promise.resolve();
       });
-      expect(screen.queryByRole("status", { name: "当前 Desktop 操作" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("status", { name: "当前 WorkGPT 操作" })).not.toBeInTheDocument();
       view.unmount();
     } finally {
       vi.useRealTimers();

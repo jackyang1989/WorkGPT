@@ -75,13 +75,13 @@ export function UpdateWorkflow({ updates, banner = false }: { updates: RuntimeUp
       {active && <button type="button" className="secondary-button" disabled={updates.actionBusy} onClick={() => void updates.cancelDownload()}>{s("Cancel download")}</button>}
       {status?.latest && <button type="button" className="secondary-button" onClick={() => {
         setOpenError(false); void desktopApi.openLatestRelease().catch(() => setOpenError(true));
-      }}>{s(status.latest.compatibility === "desktop_required" ? "View Desktop release" : "View release")}</button>}
+      }}>{s(status.latest.compatibility === "desktop_required" ? "View WorkGPT release" : "View release")}</button>}
       {!pending && !installing && <button type="button" className="text-button" disabled={updates.actionBusy} onClick={() => { setConfirmVersion(null); void updates.remindLater(); }}>{s(ready ? "Later" : "Remind me later")}</button>}
     </div>
     {openError && <p role="status">{s("Unable to open this location.")}</p>}
     {confirmVersion && <section className="update-confirmation" role="alertdialog" aria-labelledby={title}>
       <h3 id={title}>{s("Install unified update?")} · {confirmVersion}</h3>
-      <p>{s("This updates Desktop, CLI, Server and Runner together. Finish active work first. Local services may stop, and Desktop will close after the system installer starts. Your operating system may request administrator authorization.")}</p>
+      <p>{s("This updates WorkGPT, CLI, Server and Runner together. Finish active work first. Local services may stop, and the app will close after the system installer starts. Your operating system may request administrator authorization.")}</p>
       <div className="shell-actions">
         <button type="button" className="primary-button" disabled={updates.actionBusy || !ready || !update?.can_install || version !== confirmVersion} onClick={() => {
           const target = confirmVersion; setConfirmVersion(null); void updates.install(target);

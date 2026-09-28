@@ -87,8 +87,8 @@ export function ComputerPermissions({ welcome = false }: { welcome?: boolean }) 
       <strong>{p("desktopAppProbe")}</strong><p>{t("permissions.restartHelp")}</p>
       {permissions?.supported && <div className="permission-rows" data-workgpt-permission-owner="desktop">
         {([ ["screen_recording", p("screenRecording"), permissions.desktop_screen_recording], ["accessibility", p("accessibility"), permissions.desktop_accessibility] ] as const).map(([action, label, allowed]) => <div className="permission-row" key={action}>
-          <span>Desktop · {label}</span><strong className={allowed ? "permission-allowed" : "permission-needed"}>{allowed ? `✓ ${t("permissions.granted")}` : t("permissions.notGranted")}</strong>
-          {!allowed && <button type="button" className="secondary-button" aria-label={`${p("grant")} · Desktop · ${label}`} disabled={busy} onClick={() => void request(action)} data-workgpt-action={`request-desktop-${action.replace("_", "-")}`}>{p("grant")}</button>}
+          <span>WorkGPT · {label}</span><strong className={allowed ? "permission-allowed" : "permission-needed"}>{allowed ? `✓ ${t("permissions.granted")}` : t("permissions.notGranted")}</strong>
+          {!allowed && <button type="button" className="secondary-button" aria-label={`${p("grant")} · WorkGPT · ${label}`} disabled={busy} onClick={() => void request(action)} data-workgpt-action={`request-desktop-${action.replace("_", "-")}`}>{p("grant")}</button>}
         </div>)}
       </div>}
       {permissions?.supported && <button type="button" className="secondary-button" disabled={busy} onClick={() => void request("open_settings")}>{t("permissions.openSettings")}</button>}

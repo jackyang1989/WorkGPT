@@ -16,10 +16,10 @@ export function AboutPanel({ state, updates }: { state: DesktopState; updates?: 
   }, [state.binaries?.directory, state.binaries?.git_commit]);
   const link = (kind: "documentation" | "github" | "report_issue" | "contributing" | "desktop_development") => { setLinkError(false); void desktopApi.openDiagnosticResource(kind).catch(() => setLinkError(true)); };
   return <section className="settings-section" aria-labelledby="about-workgpt-title"><h2 id="about-workgpt-title">{s("About WorkGPT")}</h2>
-    <dl className="runtime-facts"><div><dt>{s("Desktop version")}</dt><dd>{desktop?.version ?? s("Unknown")}</dd></div><div><dt>{s("Desktop revision")}</dt><dd><code>{desktop?.git_commit ?? s("Unknown")}</code>{desktop?.git_dirty ? ` · ${s("Dirty build")}` : ""}</dd></div>
+    <dl className="runtime-facts"><div><dt>{s("WorkGPT version")}</dt><dd>{desktop?.version ?? s("Unknown")}</dd></div><div><dt>{s("WorkGPT revision")}</dt><dd><code>{desktop?.git_commit ?? s("Unknown")}</code>{desktop?.git_dirty ? ` · ${s("Dirty build")}` : ""}</dd></div>
       <div><dt>{s("Runtime versions")}</dt><dd>{runtime?.selected?.binaries.map(binary => `${binary.name} ${binary.metadata?.version ?? "—"}`).join(" · ") || state.binaries?.version || s("Unknown")}</dd></div>
       <div><dt>{s("Compatibility")}</dt><dd>{s(runtime?.selected?.compatibility === "compatible" ? "Compatible" : runtime?.selected?.compatibility === "incompatible" ? "Incompatible" : "Unknown")}</dd></div></dl>
-    <p className="field-help">{s("Stable updates can download automatically. Installation and closing Desktop always require your confirmation.")}</p>
+    <p className="field-help">{s("Stable updates can download automatically. Installation and closing WorkGPT always require your confirmation.")}</p>
     <p className="field-help">{s("Found a problem? Issues and pull requests are welcome. You can build current main from source and test a fix locally.")}</p>
     {updates && <><p role="status">{s(updates.checking ? "Checking for updates…" : updates.manualError ? "Update check unavailable; Runtime is unaffected." : updates.status?.update_available ? "A new stable WorkGPT release is available." : updates.status?.state === "up_to_date" ? "Up to date" : "Update status unknown")}{updates.status?.latest ? ` · ${updates.status.latest.version}` : ""}</p>
       <button type="button" className="secondary-button" disabled={updates.checking || updates.actionBusy} onClick={() => void updates.check()}>{s("Check for updates")}</button>
@@ -35,7 +35,7 @@ export function UpdateBanner({ updates }: { updates: RuntimeUpdates }) {
   if ((!notice || !updates.status?.show_banner) && !pending) return null;
   const version = pending ? updates.status?.download.version : notice?.version;
   return <aside className="runtime-update-banner" aria-label={`WorkGPT ${version}`}>
-    <div><strong>WorkGPT {version}</strong>{notice && <p>{s(notice.compatibility === "runtime_compatible" ? "Your current Desktop can use this Runtime update." : notice.compatibility === "desktop_required" ? "This release requires a Desktop update." : "A new stable WorkGPT release is available.")}</p>}</div>
+    <div><strong>WorkGPT {version}</strong>{notice && <p>{s(notice.compatibility === "runtime_compatible" ? "Your current app can use this Runtime update." : notice.compatibility === "desktop_required" ? "This release requires a WorkGPT update." : "A new stable WorkGPT release is available.")}</p>}</div>
     <UpdateWorkflow updates={updates} banner />
   </aside>;
 }

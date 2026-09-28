@@ -176,7 +176,7 @@ describe("workspace configuration boundaries", () => {
     fireEvent.click(screen.getByRole("button", { name: "Recheck permissions" }));
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
     expect(screen.getAllByText("Not granted")).toHaveLength(2);
-    expect(screen.getByRole("button", { name: "Grant Permission · Desktop · Screen Recording" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Grant Permission · WorkGPT · Screen Recording" })).toBeEnabled();
     expect(api.requestComputerPermission).not.toHaveBeenCalled();
   });
 });

@@ -220,7 +220,7 @@ export function normalizeDesktopError(value: unknown): DesktopError {
   }
   return {
     code: "desktop_operation_failed",
-    message: "Desktop could not complete the operation.",
+    message: "WorkGPT could not complete the operation.",
     next_action: "Retry the operation or open Activity for safe diagnostics.",
   };
 }

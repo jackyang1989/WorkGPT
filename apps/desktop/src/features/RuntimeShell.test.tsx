@@ -135,7 +135,7 @@ it("keeps the six localized navigation labels and semantically pressable Setting
   localStorage.setItem("workgpt.desktop.locale", "zh-CN");
   render(wrap(<><Sidebar navigation="settings" setNavigation={vi.fn()} state={state} /><SettingsPanel state={state} onState={vi.fn()} onChangeSetup={vi.fn()} /></>));
   for (const label of ["首页", "项目", "活动", "连接", "扩展", "设置"]) expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Desktop 设置" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "设置" })).toBeInTheDocument();
   expect(await screen.findByRole("checkbox", { name: "登录时启动 WorkGPT" })).toBeInTheDocument();
   for (const label of ["故障排查", "Runtime", "网络", "高级"]) {
     expect(screen.getByRole("button", { name: label })).toHaveAttribute("aria-expanded", "false");
@@ -184,7 +184,7 @@ it("shows an environment proxy as detected when Auto selects it", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Network" }));
   const panel = document.getElementById("desktop-settings-network") as HTMLElement;
   const routing = panel.querySelector("[data-workgpt-tunnel-routing]") as HTMLElement;
-  expect(within(routing).getAllByText("Desktop proxy environment")).toHaveLength(2);
+  expect(within(routing).getAllByText("WorkGPT proxy environment")).toHaveLength(2);
   expect(within(routing).queryByText("Not configured")).not.toBeInTheDocument();
 });
 

@@ -83,7 +83,7 @@ export function RuntimePanel({ state, onState, onActivity }: { state: DesktopSta
     {error && <div role="alert" className="shell-notice warning"><strong>{s("Runtime unavailable")}</strong><code>{error}</code><span>{s("Recheck Runtime")}</span></div>}
     {busy && <p role="status">{s("Loading…")}</p>}
     {confirm && <WorkspaceDialog title={s("Runtime restart warning")} onClose={() => setConfirm(null)} busy={disabled}>
-      <p>{s("Restarting the Desktop-owned Runner may interrupt active Jobs.")}</p>
+      <p>{s("Restarting the WorkGPT-owned Runner may interrupt active Jobs.")}</p>
       <p>{settings?.active_jobs == null ? s("Job count is not confirmed.") : `${s("Active Jobs")}: ${settings.active_jobs}`}</p>
       <div className="shell-actions"><button type="button" className="secondary-button" disabled={disabled} onClick={() => setConfirm(null)}>{s("Cancel")}</button>
         {onActivity && <button type="button" className="text-button" disabled={disabled} onClick={onActivity}>{s("View activity")}</button>}
@@ -100,7 +100,7 @@ export function BinaryFacts({ candidate }: { candidate: RuntimeCandidate }) {
     {!!candidate.binaries.length && <div className="runtime-binary-list" aria-label={s("Required binaries")}>{candidate.binaries.map(binary => <article key={binary.name}>
       <h4>{binary.name}</h4><dl className="runtime-facts"><div><dt>{s("File")}</dt><dd>{s(binary.present ? "Present" : "Missing")}</dd></div><div><dt>{s("Executable")}</dt><dd>{binary.executable ? "✓" : "—"}</dd></div>
         {binary.metadata && <><div><dt>{s("Version")}</dt><dd>{binary.metadata.version}</dd></div><div><dt>{s("Revision")}</dt><dd><code>{binary.metadata.git_commit ?? s("Unknown")}</code>{binary.metadata.git_dirty && <span className="workspace-badge">{s("Dirty build")}</span>}</dd></div>
-          <div><dt>{s("Target / architecture")}</dt><dd>{binary.metadata.target} / {binary.metadata.architecture}</dd></div><div><dt>{s("Desktop contract")}</dt><dd>[{binary.metadata.desktop_runtime_contract.min_generation}, {binary.metadata.desktop_runtime_contract.max_generation}]</dd></div></>}
+          <div><dt>{s("Target / architecture")}</dt><dd>{binary.metadata.target} / {binary.metadata.architecture}</dd></div><div><dt>{s("WorkGPT contract")}</dt><dd>[{binary.metadata.desktop_runtime_contract.min_generation}, {binary.metadata.desktop_runtime_contract.max_generation}]</dd></div></>}
       </dl>{binary.error_code && <code className="runtime-probe-error">{binary.error_code}</code>}</article>)}</div>}
     {candidate.advisories.length > 0 && <p className="field-help">{s("Build revisions are diagnostic identity, not compatibility gates.")} {s("Operator responsibility")}</p>}
     {candidate.error_code && <p role="alert"><code>{candidate.error_code}</code></p>}
