@@ -2,9 +2,7 @@ use crate::Database;
 use workgpt_core::runner_job_receipt::{
     RetainedJobReceipt, RunnerAccessGroup, JOB_RECEIPT_PAYLOAD_MAX_BYTES,
 };
-use workgpt_core::runner_protocol::{
-    JOB_INVENTORY_MAX_TERMINAL_JOBS, JOB_TERMINAL_RETENTION_SECS,
-};
+use workgpt_core::runner_protocol::{JOB_INVENTORY_MAX_TERMINAL_JOBS, JOB_TERMINAL_RETENTION_SECS};
 
 fn receipt(now: i64, id: &str) -> RetainedJobReceipt {
     RetainedJobReceipt {

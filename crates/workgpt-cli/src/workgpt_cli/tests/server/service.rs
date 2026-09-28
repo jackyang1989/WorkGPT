@@ -46,8 +46,7 @@ fn install_service_generates_expected_unit_without_tokens() {
     assert!(unit.contains("ExecStart=\"/usr/local/bin/workgpt-server\"\n"));
     assert!(unit.contains("TimeoutStopSec=330s\n"));
     assert!(
-        workgpt::SERVER_SYSTEMD_TIMEOUT_STOP_SECS
-            > workgpt::SERVER_GRACEFUL_SHUTDOWN_TIMEOUT_SECS
+        workgpt::SERVER_SYSTEMD_TIMEOUT_STOP_SECS > workgpt::SERVER_GRACEFUL_SHUTDOWN_TIMEOUT_SECS
     );
     assert!(unit.contains("WorkingDirectory=/var/lib/workgpt\n"));
     assert!(unit.contains("User=workgpt\n"));

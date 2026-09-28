@@ -1407,8 +1407,7 @@ fn active_jobs_for_client(runner_jobs: &[ShellJobInfo], client_id: &str) -> usiz
     runner_jobs
         .iter()
         .filter(|job| {
-            job.client_id == client_id
-                && workgpt_runner_registry::job_status_is_active(&job.status)
+            job.client_id == client_id && workgpt_runner_registry::job_status_is_active(&job.status)
         })
         .count()
 }

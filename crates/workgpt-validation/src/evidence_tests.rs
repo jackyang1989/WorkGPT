@@ -1626,12 +1626,7 @@ fn generic_validation_scope_and_complex_script_identity_fail_closed() {
     .unwrap();
     let y = run_process_validation_identity(
         "cargo",
-        &[
-            "test".into(),
-            "other".into(),
-            "-p".into(),
-            "workgpt".into(),
-        ],
+        &["test".into(), "other".into(), "-p".into(), "workgpt".into()],
         None,
         Some("."),
         Some("test"),

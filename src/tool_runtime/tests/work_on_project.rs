@@ -398,10 +398,7 @@ fn managed_fixture_git(root: &Path, args: &[&str]) -> String {
 fn seed_managed_tool_runtime_fixture(source: &Path, worktree: &Path) -> String {
     std::fs::create_dir_all(source).unwrap();
     managed_fixture_git(source, &["init"]);
-    managed_fixture_git(
-        source,
-        &["config", "user.email", "workgpt@example.invalid"],
-    );
+    managed_fixture_git(source, &["config", "user.email", "workgpt@example.invalid"]);
     managed_fixture_git(source, &["config", "user.name", "WorkGPT Test"]);
     std::fs::write(source.join("hello.txt"), "committed\n").unwrap();
     managed_fixture_git(source, &["add", "hello.txt"]);

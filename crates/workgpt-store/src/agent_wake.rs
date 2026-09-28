@@ -1105,8 +1105,7 @@ impl Database {
         let claim_fence = new_proof(AGENT_WAKE_CLAIM_FENCE_PREFIX);
         let consume_token = new_proof(AGENT_WAKE_CONSUME_TOKEN_PREFIX);
         let claim_fence_hash = digest_text("workgpt.agent-wake.claim-fence.v1", &claim_fence);
-        let consume_token_hash =
-            digest_text("workgpt.agent-wake.consume-token.v1", &consume_token);
+        let consume_token_hash = digest_text("workgpt.agent-wake.consume-token.v1", &consume_token);
         let claim_lease_expires_at_unix_ms = now.saturating_add(DEFAULT_WAKE_CLAIM_LEASE_MS);
         transaction
             .execute(
@@ -2247,8 +2246,7 @@ impl Database {
         let consume_token = new_proof(AGENT_WAKE_CONSUME_TOKEN_PREFIX);
         let claim_fence = new_proof(AGENT_WAKE_CLAIM_FENCE_PREFIX);
         let claim_fence_hash = digest_text("workgpt.agent-wake.claim-fence.v1", &claim_fence);
-        let consume_token_hash =
-            digest_text("workgpt.agent-wake.consume-token.v1", &consume_token);
+        let consume_token_hash = digest_text("workgpt.agent-wake.consume-token.v1", &consume_token);
         transaction
             .execute(
                 "INSERT INTO wg_agent_wake_attempts (

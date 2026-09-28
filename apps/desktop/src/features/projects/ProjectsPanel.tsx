@@ -4,7 +4,9 @@ import { useProduct } from "../../i18n/product";
 import { displayProjectPath, projectName, useWorkspace } from "../workspace/WorkspaceContext";
 import { ProjectRows } from "./ProjectRows";
 
-export function ProjectsPanel() {
+import type { Navigation } from "../../components/Sidebar";
+
+export function ProjectsPanel({ onNavigate }: { onNavigate?: (page: Navigation) => void }) {
   const p = useProduct();
   const workspace = useWorkspace();
   const [query, setQuery] = useState("");
@@ -14,7 +16,10 @@ export function ProjectsPanel() {
       .includes(query.trim().toLocaleLowerCase()),
   );
   return <section className="page-section workspace-page" aria-labelledby="projects-title" data-workgpt-page="projects">
-    <header className="page-heading-row"><div><span className="eyebrow">{p("workspace")}</span><h1 id="projects-title">{p("projects")} <span className="heading-count">{workspace.projects.length}</span></h1></div></header>
+    <header className="page-heading-row">
+      <div><span className="eyebrow">{p("workspace")}</span><h1 id="projects-title">{p("projects")} <span className="heading-count">{workspace.projects.length}</span></h1></div>
+      {onNavigate && <button type="button" className="secondary-button" onClick={() => onNavigate("settings")}>{p("fileAccess")}</button>}
+    </header>
     {workspace.runner && <p className="workspace-notice">{p("projectAccessScope")}</p>}
     {workspace.runners.length > 0 && <section className="form-card" aria-label={p("authorizedRunners")}>
       <h2>{p("authorizedRunners")}</h2>
@@ -31,6 +36,18 @@ export function ProjectsPanel() {
     <div className="workspace-search"><TextInput id="projects-search" label={p("search")} type="search" value={query} onChange={event => setQuery(event.currentTarget.value)} /></div>
     {workspace.error && <div className="workspace-notice" role="alert">{p(workspace.errorReason)} <button className="text-button" onClick={workspace.refresh}>{p("refresh")}</button></div>}
     <ProjectRows projects={rows} />
-    {!rows.length && !workspace.error && !workspace.loading && <p className="workspace-empty">{p(query ? "noMatches" : "noProjects")}</p>}    {workspace.runner?.projects_truncated && <p className="workspace-notice">{p("partial")}</p>}
+    {!rows.length && !workspace.error && !workspace.loading && (
+      <div className="workspace-empty">
+        <p>{p(query ? "noMatches" : "noProjects")}</p>
+        {!query && onNavigate && (
+          <div style={{ marginTop: "1rem" }}>
+            <button type="button" className="secondary-button" onClick={() => onNavigate("settings")}>
+              {p("fileAccess")} ({p("addFolder")})
+            </button>
+          </div>
+        )}
+      </div>
+    )}
+    {workspace.runner?.projects_truncated && <p className="workspace-notice">{p("partial")}</p>}
   </section>;
 }

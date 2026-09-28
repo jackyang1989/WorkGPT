@@ -208,6 +208,7 @@ impl DesktopCore {
                     Some(status) if status.service_status.running == Some(false) => {
                         ConnectionLifecycle::Stopped
                     }
+                    _ if !profile.config.enabled => ConnectionLifecycle::Stopped,
                     _ => ConnectionLifecycle::Error,
                 };
                 runtime.health = if runtime.ready {

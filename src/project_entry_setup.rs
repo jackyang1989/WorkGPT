@@ -621,9 +621,7 @@ pub(super) fn validate_existing_runner(
             return Err(ProductError::new(
                 "project_registration_invalid",
                 format!("existing Runner configuration conflicts in field '{field}'"),
-                Some(
-                    "Resolve the existing configuration conflict; WorkGPT will not overwrite it.",
-                ),
+                Some("Resolve the existing configuration conflict; WorkGPT will not overwrite it."),
             ));
         }
     }

@@ -3161,10 +3161,10 @@ fn internal_mode_command(mode: &str, args: &[String]) -> Result<Command, String>
     }
     #[cfg(not(test))]
     {
-        let mut command =
-            Command::new(std::env::current_exe().map_err(|error| {
-                format!("failed to locate workgpt-runner executable: {error}")
-            })?);
+        let mut command = Command::new(
+            std::env::current_exe()
+                .map_err(|error| format!("failed to locate workgpt-runner executable: {error}"))?,
+        );
         command.arg(mode).args(args).env_clear();
         Ok(command)
     }

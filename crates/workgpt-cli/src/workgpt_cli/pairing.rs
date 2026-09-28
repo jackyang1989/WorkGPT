@@ -36,9 +36,7 @@ pub(crate) fn resolve_pairing_create_token(opts: &PairingCreateOptions) -> Resul
         return Ok(token);
     }
     let token = std::env::var("WORKGPT_TOKEN")
-        .map_err(|_| {
-            "--env-file, --token-file, --token, or WORKGPT_TOKEN is required".to_string()
-        })?
+        .map_err(|_| "--env-file, --token-file, --token, or WORKGPT_TOKEN is required".to_string())?
         .trim()
         .to_string();
     if token.is_empty() {

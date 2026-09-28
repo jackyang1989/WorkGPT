@@ -78,13 +78,7 @@ async fn project_refs_route_exact_projects_without_bare_name_uniqueness() {
         None,
         RunnerCapabilities::default(),
         vec![
-            project(
-                "special",
-                "workgpt",
-                "WorkGPT special",
-                "/srv/special",
-                '1',
-            ),
+            project("special", "workgpt", "WorkGPT special", "/srv/special", '1'),
             project("special", "alpha-id", "friendly", "/srv/alpha", '2'),
         ],
     )

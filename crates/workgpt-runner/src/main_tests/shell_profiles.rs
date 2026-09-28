@@ -36,10 +36,7 @@ fn prepared_profile_init_script_export_is_available_to_run_shell() {
         vec![(
             "test",
             ShellProfileConfig {
-                init_script: Some(profile_init_export(
-                    "WORKGPT_TEST_PROFILE",
-                    "from_snapshot",
-                )),
+                init_script: Some(profile_init_export("WORKGPT_TEST_PROFILE", "from_snapshot")),
                 ..ShellProfileConfig::default()
             },
         )],

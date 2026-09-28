@@ -732,8 +732,7 @@ pub async fn mcp_post(req: &mut Request, depot: &mut Depot, res: &mut Response) 
                 .error(error)
                 .summary(summary)
                 .meaningful(
-                    workgpt_tool_contracts::runtime_tool_activity_interaction(tool)
-                        .is_meaningful(),
+                    workgpt_tool_contracts::runtime_tool_activity_interaction(tool).is_meaningful(),
                 )
                 .recorder_gap(correlation.recorder_gap_session_id.clone());
             if let Some(ids) = mcp_tool_action_audit_ids(

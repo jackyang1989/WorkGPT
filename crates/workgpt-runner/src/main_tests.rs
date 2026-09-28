@@ -1154,10 +1154,7 @@ fn managed_git(root: &Path, args: &[&str]) -> String {
 fn seed_managed_worktree_repo(source: &Path) -> (String, String) {
     std::fs::create_dir_all(source).unwrap();
     managed_git(source, &["init"]);
-    managed_git(
-        source,
-        &["config", "user.email", "workgpt@example.invalid"],
-    );
+    managed_git(source, &["config", "user.email", "workgpt@example.invalid"]);
     managed_git(source, &["config", "user.name", "WorkGPT Test"]);
     std::fs::write(source.join("hello.txt"), "first\n").unwrap();
     managed_git(source, &["add", "hello.txt"]);

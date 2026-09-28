@@ -692,11 +692,7 @@ async fn uncertain_user_auth_does_not_reregister_saved_credential() {
         b"WORKGPT_TOKEN=wg_boot_fixture\n",
     )
     .unwrap();
-    atomic_private_write(
-        &store.root().join("workgpt-user-token"),
-        b"wg_pat_existing",
-    )
-    .unwrap();
+    atomic_private_write(&store.root().join("workgpt-user-token"), b"wg_pat_existing").unwrap();
     let mut environment = record(
         url,
         None,

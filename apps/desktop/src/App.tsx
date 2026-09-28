@@ -132,7 +132,7 @@ function DesktopApp() {
           />
         ))}
         {navigation === "projects" && (
-          <ProjectsPanel />
+          <ProjectsPanel onNavigate={setNavigation} />
         )}
         {navigation === "connection" && <ConnectionPanel state={state} onState={commitState} />}
         {navigation === "activity" && <ActivityPanel activity={activity} />}

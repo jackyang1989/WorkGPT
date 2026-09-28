@@ -627,14 +627,16 @@ fn payload_subprocess_entrypoint() {
             fs::write(&parent_marker, std::process::id().to_string()).unwrap();
             let mut child = Command::new(std::env::current_exe().unwrap());
             child
-                    .arg("--exact")
-                    .arg("workgpt_runner::detached_job::tests::payload_descendant_subprocess_entrypoint")
-                    .arg("--nocapture")
-                    .env_clear()
-                    .env("WORKGPT_DETACHED_DESCENDANT_MARKER", child_marker)
-                    .stdin(Stdio::null())
-                    .stdout(Stdio::inherit())
-                    .stderr(Stdio::inherit());
+                .arg("--exact")
+                .arg(
+                    "workgpt_runner::detached_job::tests::payload_descendant_subprocess_entrypoint",
+                )
+                .arg("--nocapture")
+                .env_clear()
+                .env("WORKGPT_DETACHED_DESCENDANT_MARKER", child_marker)
+                .stdin(Stdio::null())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit());
             #[allow(clippy::zombie_processes)]
             let _child = child.spawn().unwrap();
             std::thread::sleep(Duration::from_secs(60));

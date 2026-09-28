@@ -10,8 +10,7 @@ use workgpt_core::runner_job_lifecycle::RunnerJobLifecycle;
 use workgpt_runner_registry::JobAttentionSnapshot;
 
 const MAX_CURSOR_KEYS: usize = 128;
-const MAX_ACTIVE_JOBS_PER_KEY: usize =
-    workgpt_core::runner_protocol::JOB_INVENTORY_MAX_ACTIVE_JOBS;
+const MAX_ACTIVE_JOBS_PER_KEY: usize = workgpt_core::runner_protocol::JOB_INVENTORY_MAX_ACTIVE_JOBS;
 const MAX_TERMINAL_JOBS_PER_KEY: usize = 32;
 const MAX_SNAPSHOT_JOBS_PER_KEY: usize = MAX_ACTIVE_JOBS_PER_KEY + MAX_TERMINAL_JOBS_PER_KEY;
 const MAX_ITEMS: usize = 8;

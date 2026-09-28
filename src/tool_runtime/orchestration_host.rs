@@ -686,8 +686,7 @@ impl CanonicalOrchestrationHost {
             .receipt();
         for child in &mut receipt.children {
             if let Some(source) = child.source_state.as_mut() {
-                if source.freshness != workgpt_core::validation_source::ValidationFreshness::Stale
-                {
+                if source.freshness != workgpt_core::validation_source::ValidationFreshness::Stale {
                     *source = self
                         .tools
                         .validation_sources

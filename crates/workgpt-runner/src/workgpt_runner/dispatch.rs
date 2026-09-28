@@ -436,14 +436,19 @@ pub(crate) fn dispatch_request_with_outcome(
                 // Carry the new generation in the typed response itself. The
                 // best-effort metadata envelope follows the result and may not
                 // have reached Control when it decides which rules to retain.
-                result.stdout = Some(serde_json::to_string(
-                    &workgpt_core::runner_instruction::RunnerInstructionSnapshotResponse {
-                        format: workgpt_core::runner_instruction::RUNNER_INSTRUCTION_RESPONSE_FORMAT.into(),
-                        generation: current.generation,
-                        scan_complete: false,
-                        files: Vec::new(),
-                    },
-                ).expect("instruction snapshot serialization"));
+                result.stdout = Some(
+                    serde_json::to_string(
+                        &workgpt_core::runner_instruction::RunnerInstructionSnapshotResponse {
+                            format:
+                                workgpt_core::runner_instruction::RUNNER_INSTRUCTION_RESPONSE_FORMAT
+                                    .into(),
+                            generation: current.generation,
+                            scan_complete: false,
+                            files: Vec::new(),
+                        },
+                    )
+                    .expect("instruction snapshot serialization"),
+                );
                 result.exit_code = Some(0);
                 result.stderr = None;
                 result.error = None;

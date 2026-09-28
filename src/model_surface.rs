@@ -851,8 +851,7 @@ mod tests {
 
     #[test]
     fn finish_coding_task_nested_show_changes_recovery_projects_with_route() {
-        let canonical_schema =
-            workgpt_tool_contracts::output_schema_for_tool("finish_coding_task");
+        let canonical_schema = workgpt_tool_contracts::output_schema_for_tool("finish_coding_task");
         let canonical_call = json!({
             "follow_up_kind": "mechanically_followable",
             "tool": "git_diff_hunks",

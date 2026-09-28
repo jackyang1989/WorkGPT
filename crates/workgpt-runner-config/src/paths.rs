@@ -165,10 +165,7 @@ pub fn default_client_config_base_dir() -> Result<PathBuf, String> {
         if let Some(profile) = std::env::var_os("USERPROFILE").filter(|value| !value.is_empty()) {
             return Ok(PathBuf::from(profile).join(".config/workgpt"));
         }
-        Err(
-            "cannot determine the WorkGPT config directory: set APPDATA or USERPROFILE"
-                .to_string(),
-        )
+        Err("cannot determine the WorkGPT config directory: set APPDATA or USERPROFILE".to_string())
     }
     #[cfg(not(windows))]
     {

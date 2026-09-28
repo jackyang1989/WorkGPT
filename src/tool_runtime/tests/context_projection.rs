@@ -897,8 +897,7 @@ async fn workflow_context_uses_mcp_host_profile_only_for_mcp_omission() {
         let result = outcome.result.expect("model-facing result");
         assert!(result.success, "{:?}", result.error);
         assert_eq!(
-            context_material(&result, "workgpt.workflow")["projection"]["tool_strategy"]
-                ["profile"],
+            context_material(&result, "workgpt.workflow")["projection"]["tool_strategy"]["profile"],
             expected
         );
     }

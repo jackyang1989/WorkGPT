@@ -569,10 +569,7 @@ async fn download_cloudflared_asset_with_network(
     let client = build_managed_download_client(network)?;
     let mut response = client
         .get(url)
-        .header(
-            USER_AGENT,
-            format!("workgpt/{}", env!("CARGO_PKG_VERSION")),
-        )
+        .header(USER_AGENT, format!("workgpt/{}", env!("CARGO_PKG_VERSION")))
         .send()
         .await
         .map_err(|error| download_error(download_request_failure(&error)))?;
@@ -782,7 +779,9 @@ fn verification_error() -> ProductError {
     ProductError::new(
         "tunnel_unavailable",
         "managed cloudflared failed integrity or version verification",
-        Some("Retry workgpt share, or set WORKGPT_CLOUDFLARED_BIN to a trusted cloudflared binary."),
+        Some(
+            "Retry workgpt share, or set WORKGPT_CLOUDFLARED_BIN to a trusted cloudflared binary.",
+        ),
     )
 }
 

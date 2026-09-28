@@ -167,9 +167,7 @@ pub use workgpt_tool_contracts::tool_inputs::CheckpointValidationInput;
 pub use workgpt_tool_contracts::tool_inputs::{
     ApplyFileChangeKind, ApplyTextEditInput, ApplyTextEditKind, SessionMode, StartupDetail,
 };
-pub use workgpt_tool_contracts::tool_inputs::{
-    ExecutionPurpose, ExecutionShell, ListToolsOptions,
-};
+pub use workgpt_tool_contracts::tool_inputs::{ExecutionPurpose, ExecutionShell, ListToolsOptions};
 pub use workgpt_tool_contracts::ToolSpec;
 pub use workgpt_tool_runtime_contracts::tool_result::ToolResult;
 pub(crate) use workgpt_tool_runtime_contracts::tool_result::{

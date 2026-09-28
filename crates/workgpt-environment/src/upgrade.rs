@@ -2810,8 +2810,8 @@ mod tests {
                 source_sha: "a".repeat(40),
                 platform: "linux-x64".into(),
                 source_workflow_run_id: 1,
-                source_workflow_ref: "jackyang1989/WorkGPT/.github/workflows/release-build.yml@main"
-                    .into(),
+                source_workflow_ref:
+                    "jackyang1989/WorkGPT/.github/workflows/release-build.yml@main".into(),
                 manifest_sha256: "b".repeat(64),
                 provenance_verified: true,
                 root: root.into(),
@@ -2940,10 +2940,7 @@ mod tests {
             receipt.owner_identity,
             journal.record.request.account.identity
         );
-        assert_eq!(
-            receipt.targets.get("workgpt"),
-            Some(&root.join("workgpt"))
-        );
+        assert_eq!(receipt.targets.get("workgpt"), Some(&root.join("workgpt")));
         journal.operation_id = uuid::Uuid::new_v4().to_string();
         assert_ne!(receipt, prepared_receipt(root, &journal));
     }

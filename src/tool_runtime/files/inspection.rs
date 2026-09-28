@@ -1797,9 +1797,7 @@ mod tests {
         let serialized = serde_json::to_string(&result.output).unwrap();
         assert!(!serialized.contains("leak"));
         assert!(!serialized.contains("runner_secret"));
-        assert!(
-            serialized.len() < workgpt_workspace::file_read_range::MAX_SERIALIZED_OUTPUT_BYTES
-        );
+        assert!(serialized.len() < workgpt_workspace::file_read_range::MAX_SERIALIZED_OUTPUT_BYTES);
     }
 
     #[test]
@@ -1831,9 +1829,7 @@ mod tests {
         let text = out["text"].as_str().unwrap();
         assert!(text.len() < 256);
         let serialized = serde_json::to_string(&out).unwrap();
-        assert!(
-            serialized.len() < workgpt_workspace::file_read_range::MAX_SERIALIZED_OUTPUT_BYTES
-        );
+        assert!(serialized.len() < workgpt_workspace::file_read_range::MAX_SERIALIZED_OUTPUT_BYTES);
     }
 
     #[test]

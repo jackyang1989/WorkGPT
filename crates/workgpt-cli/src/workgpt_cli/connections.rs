@@ -368,8 +368,7 @@ impl ConnectionPaths {
         Self {
             descriptor: dir.join("server.toml"),
             runner_config: dir.join(workgpt_runner_config::paths::RUNNER_CONFIG_FILE),
-            project_registry_dir: dir
-                .join(workgpt_runner_config::paths::PROJECT_REGISTRY_DIR_NAME),
+            project_registry_dir: dir.join(workgpt_runner_config::paths::PROJECT_REGISTRY_DIR_NAME),
             user_token: dir.join("workgpt-user-token"),
             dir,
         }

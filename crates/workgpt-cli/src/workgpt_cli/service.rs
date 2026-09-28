@@ -2658,8 +2658,7 @@ mod tests {
         std::fs::create_dir(&target).unwrap();
         let linked = tmp.path().join("user");
         symlink(&target, &linked).unwrap();
-        let error =
-            ensure_service_file_parent(&linked.join("workgpt-runner.service")).unwrap_err();
+        let error = ensure_service_file_parent(&linked.join("workgpt-runner.service")).unwrap_err();
         assert!(
             error.contains("symlinked service unit directory"),
             "{error}"

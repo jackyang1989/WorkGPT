@@ -152,8 +152,10 @@ impl AppState {
                 );
             }
         }
-        self.connections
-            .project(&mut snapshot.connections, snapshot.readiness.runtime_ready);
+        if snapshot.persistent_environment.is_none() {
+            self.connections
+                .project(&mut snapshot.connections, snapshot.readiness.runtime_ready);
+        }
         snapshot.current_operation = self.operations.current();
         snapshot.activity_sequence = self.activity.latest_sequence();
         if snapshot.openai_tunnel_config.source == crate::models::TunnelConfigSource::Environment {

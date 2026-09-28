@@ -4558,7 +4558,9 @@ fn main() {
         );
         assert!(!marker.exists(), "terminated grandchild reached marker");
 
-        crate::workgpt_runner::job_manager::job_manager_tests::assert_post_spawn_interruption_delta(&operation, 0, error);
+        crate::workgpt_runner::job_manager::job_manager_tests::assert_post_spawn_interruption_delta(
+            &operation, 0, error,
+        );
     }
 
     #[test]

@@ -1008,8 +1008,7 @@ fn normalize_search_result(
     let root_prefix = format!("{}/", root.trim_end_matches('/'));
     let mut lines = Vec::new();
     lines.push(
-        json!({"workgpt_search":{"backend":"claude_code","feature_unavailable":false}})
-            .to_string(),
+        json!({"workgpt_search":{"backend":"claude_code","feature_unavailable":false}}).to_string(),
     );
     for line in raw.lines() {
         if line.is_empty() {

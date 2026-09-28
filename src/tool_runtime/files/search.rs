@@ -1796,12 +1796,8 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .expect("system time before epoch")
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!(
-            "workgpt-{}-{}-{}",
-            name,
-            std::process::id(),
-            stamp
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("workgpt-{}-{}-{}", name, std::process::id(), stamp));
         std::fs::create_dir_all(&dir).expect("create temp dir");
         dir
     }

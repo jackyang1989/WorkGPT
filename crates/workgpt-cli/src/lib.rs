@@ -1860,9 +1860,9 @@ fn parse_runner_run(args: &[String]) -> Result<InternalRunOptions, String> {
         Some(config) => config,
         None => match profile.as_deref() {
             Some(profile) => client_profile_runner_config(profile)?,
-            None => workgpt_runner_config::paths::resolve_runner_config_path(Path::new(
-                "/etc/workgpt",
-            ))?,
+            None => {
+                workgpt_runner_config::paths::resolve_runner_config_path(Path::new("/etc/workgpt"))?
+            }
         },
     };
     let bin = discover_internal_binary("workgpt-runner").ok_or_else(|| {

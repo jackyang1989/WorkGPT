@@ -11,9 +11,7 @@ use workgpt_tool_contracts::{
 
 use super::util::{redact_and_bound_value, validation_excerpt};
 
-pub(super) fn audit_policy_for_tool(
-    name: &str,
-) -> Option<workgpt_tool_contracts::ToolAuditPolicy> {
+pub(super) fn audit_policy_for_tool(name: &str) -> Option<workgpt_tool_contracts::ToolAuditPolicy> {
     lookup_tool_definition(name).map(|definition| definition.audit_policy())
 }
 

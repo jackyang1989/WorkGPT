@@ -23,6 +23,10 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
+#[cfg(windows)]
+use windows_sys::Win32::Storage::FileSystem::{
+    MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+};
 #[cfg(all(test, unix))]
 use workgpt_core::coding_agent::CodingAgentCancelRequest;
 use workgpt_core::coding_agent::{
@@ -38,10 +42,6 @@ use workgpt_core::coding_agent::{
 };
 use workgpt_process::ManagedChild;
 use workgpt_runner_config::paths::paths_equal;
-#[cfg(windows)]
-use windows_sys::Win32::Storage::FileSystem::{
-    MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
-};
 
 const STORE_SCHEMA_VERSION: u32 = 1;
 const STORE_FILE: &str = "state.json";

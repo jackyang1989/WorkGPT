@@ -92,10 +92,7 @@ fn metadata_rejects_unverifiable_contract_and_control_text() {
     assert_eq!(info.validate("workgpt"), Err("runtime_contract_malformed"));
     info.desktop_runtime_contract = DESKTOP_RUNTIME_CONTRACT;
     info.version = "1.0.0\nAuthorization: secret".into();
-    assert_eq!(
-        info.validate("workgpt"),
-        Err("build_info_metadata_invalid")
-    );
+    assert_eq!(info.validate("workgpt"), Err("build_info_metadata_invalid"));
 }
 
 #[test]

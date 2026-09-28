@@ -939,10 +939,7 @@ impl ReloadableRunnerConfig {
                 );
             }
         }
-        eprintln!(
-            "workgpt-runner config reload {}",
-            status.last_reload_result
-        );
+        eprintln!("workgpt-runner config reload {}", status.last_reload_result);
         let mut fields = status.restart_required_fields.clone();
         fields.sort();
         let response = RunnerConfigOperationResponse {
@@ -1351,8 +1348,8 @@ fn validate_ssh_config(ssh: &mut SshConfig) -> Result<(), String> {
         validate_ssh_resource_name(name)?;
         resource.host = workgpt_core::ssh_resource::normalize_ssh_resource_target(&resource.host)
             .map_err(|_| {
-                format!("ssh.resources.{name}.host must be a non-empty safe SSH destination")
-            })?;
+            format!("ssh.resources.{name}.host must be a non-empty safe SSH destination")
+        })?;
         resource.default_cwd = workgpt_core::ssh_resource::normalize_ssh_resource_default_cwd(
             resource.default_cwd.as_deref(),
         )

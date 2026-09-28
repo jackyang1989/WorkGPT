@@ -2715,8 +2715,7 @@ mod tests {
             "{text}"
         );
         assert!(
-            text.contains("workgpt project register --config")
-                && text.contains("/path/to/project"),
+            text.contains("workgpt project register --config") && text.contains("/path/to/project"),
             "{text}"
         );
         assert!(!text.contains("device/client_id"), "{text}");

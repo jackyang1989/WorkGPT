@@ -294,25 +294,23 @@ async fn managed_user_coding_agent_inventory_does_not_cross_owner() {
                         name: "Codex".to_string(),
                     },
                 ]),
-                coding_agent_inventory: Some(
-                    workgpt_core::coding_agent::CodingAgentRunInventory {
-                        runs: vec![workgpt_core::coding_agent::CodingAgentRunSnapshot {
-                            run_id: run_id.to_string(),
-                            intent_fingerprint: format!("intent-{owner}"),
-                            authority_fingerprint: format!("auth_{owner}"),
-                            runtime_project_id: format!("agent:{client_id}:private"),
-                            provider_id: "codex".to_string(),
-                            provider_instance_id: format!("provider-{owner}"),
-                            state: workgpt_core::coding_agent::CodingAgentRunState::Running,
-                            execution_state:
-                                workgpt_core::coding_agent::CodingAgentExecutionState::Started,
-                            observation_revision: 1,
-                            created_at: 1,
-                            updated_at: 1,
-                            terminal: None,
-                        }],
-                    },
-                ),
+                coding_agent_inventory: Some(workgpt_core::coding_agent::CodingAgentRunInventory {
+                    runs: vec![workgpt_core::coding_agent::CodingAgentRunSnapshot {
+                        run_id: run_id.to_string(),
+                        intent_fingerprint: format!("intent-{owner}"),
+                        authority_fingerprint: format!("auth_{owner}"),
+                        runtime_project_id: format!("agent:{client_id}:private"),
+                        provider_id: "codex".to_string(),
+                        provider_instance_id: format!("provider-{owner}"),
+                        state: workgpt_core::coding_agent::CodingAgentRunState::Running,
+                        execution_state:
+                            workgpt_core::coding_agent::CodingAgentExecutionState::Started,
+                        observation_revision: 1,
+                        created_at: 1,
+                        updated_at: 1,
+                        terminal: None,
+                    }],
+                }),
                 client_id: client_id.to_string(),
                 runner_instance_id: format!("inst-{client_id}"),
                 runner_protocol_generation: crate::runner_protocol::RUNNER_PROTOCOL_GENERATION_V2,

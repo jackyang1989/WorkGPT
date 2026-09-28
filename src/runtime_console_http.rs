@@ -4735,23 +4735,17 @@ mod tests {
         assert!(!by_runner.truncated);
         assert_eq!(by_runner.projects[0].id, "agent:special:workgpt");
 
-        let by_query =
-            projects_for_filters_auth(&runtime, &auth, None, Some("workgpt"), Some(100))
-                .await
-                .unwrap();
+        let by_query = projects_for_filters_auth(&runtime, &auth, None, Some("workgpt"), Some(100))
+            .await
+            .unwrap();
         assert_eq!(by_query.total, 1);
         assert!(!by_query.truncated);
         assert_eq!(by_query.projects[0].id, "agent:special:workgpt");
 
-        let combined = projects_for_filters_auth(
-            &runtime,
-            &auth,
-            Some("special"),
-            Some("workgpt"),
-            Some(100),
-        )
-        .await
-        .unwrap();
+        let combined =
+            projects_for_filters_auth(&runtime, &auth, Some("special"), Some("workgpt"), Some(100))
+                .await
+                .unwrap();
         assert_eq!(combined.total, 1);
         assert_eq!(combined.projects[0].id, "agent:special:workgpt");
     }

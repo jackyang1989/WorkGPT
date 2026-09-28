@@ -500,9 +500,7 @@ mod tests {
         );
         let lines = report.log_lines();
         assert!(lines.iter().any(|line| {
-            line.starts_with(
-                "workgpt-runner shutdown phase completed phase=browser_runtimes_stop ",
-            )
+            line.starts_with("workgpt-runner shutdown phase completed phase=browser_runtimes_stop ")
         }));
         for line in lines {
             assert!(!line.contains('\n'));

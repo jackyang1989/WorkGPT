@@ -1529,8 +1529,8 @@ fn insert_structured_validation_target(
     arguments: &serde_json::Map<String, Value>,
     out: &mut serde_json::Map<String, Value>,
 ) {
-    let identity_kind = workgpt_tool_contracts::runtime_tool_session_evidence_policy(tool_name)
-        .validation_identity;
+    let identity_kind =
+        workgpt_tool_contracts::runtime_tool_session_evidence_policy(tool_name).validation_identity;
     if let Some(identity) =
         structured_validation_target_identity(identity_kind, &Value::Object(arguments.clone()))
     {

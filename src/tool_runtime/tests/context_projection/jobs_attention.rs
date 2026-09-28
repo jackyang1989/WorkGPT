@@ -45,11 +45,7 @@ async fn jobs_attention_is_explicit_deduplicated_and_coexists_with_guidance() {
             .len(),
         3
     );
-    for key in [
-        "jobs.attention",
-        "project.instructions",
-        "workgpt.workflow",
-    ] {
+    for key in ["jobs.attention", "project.instructions", "workgpt.workflow"] {
         assert_eq!(context_material(&result, key)["status"], "available");
     }
     let jobs = &context_material(&result, "jobs.attention")["projection"];

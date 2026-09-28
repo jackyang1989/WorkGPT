@@ -532,8 +532,7 @@ fn mcp_file_import_trust_decision_reports_exact_failure_stage() {
     let mut config = (*test_config_oauth2(Some("secret"))).clone();
     let (_tmp, db) = test_db();
     let user = seed_user(&db, "alice");
-    let client =
-        seed_mcp_import_client(&db, &user, "ChatGPT WorkGPT", MCP_IMPORT_TRUSTED_REDIRECT);
+    let client = seed_mcp_import_client(&db, &user, "ChatGPT WorkGPT", MCP_IMPORT_TRUSTED_REDIRECT);
     config.oauth2.trusted_mcp_file_client_ids = vec![client.client_id.clone()];
 
     let missing_auth = mcp_host_file_import_trust_decision_from_state(&config, &db, None);
@@ -738,8 +737,7 @@ async fn adaptive_gateway_file_import_preserves_target_aware_host_trust_impl() {
     let _lock = lock_mcp_import_test().await;
     let (_db_tmp, db) = test_db();
     let user = seed_user(&db, "alice");
-    let client =
-        seed_mcp_import_client(&db, &user, "ChatGPT WorkGPT", MCP_IMPORT_TRUSTED_REDIRECT);
+    let client = seed_mcp_import_client(&db, &user, "ChatGPT WorkGPT", MCP_IMPORT_TRUSTED_REDIRECT);
     let token = seed_oauth_access_token(&db, &client, &user, "project:write");
     let project_tmp = tempfile::tempdir().unwrap();
     let (runtime, _registry) = mcp_import_runtime_inner(project_tmp.path(), Some("alice")).await;
@@ -802,8 +800,7 @@ async fn oauth_mcp_file_import_startup_env_stateless_2026_crosses_provenance_gat
 
     let (_db_tmp, db) = test_db();
     let user = seed_user(&db, "alice");
-    let client =
-        seed_mcp_import_client(&db, &user, "ChatGPT WorkGPT", MCP_IMPORT_TRUSTED_REDIRECT);
+    let client = seed_mcp_import_client(&db, &user, "ChatGPT WorkGPT", MCP_IMPORT_TRUSTED_REDIRECT);
     let token = seed_oauth_access_token(&db, &client, &user, "project:write");
     let env_file_other_client_id = crate::auth::generate_oauth_client_id();
     let config = mcp_import_config_from_startup_env(&client.client_id, &env_file_other_client_id);
@@ -1181,8 +1178,7 @@ async fn oauth_mcp_file_import_trusted_client_saves_pptx_impl() {
 
     let (_db_tmp, db) = test_db();
     let user = seed_user(&db, "alice");
-    let client =
-        seed_mcp_import_client(&db, &user, "ChatGPT WorkGPT", MCP_IMPORT_TRUSTED_REDIRECT);
+    let client = seed_mcp_import_client(&db, &user, "ChatGPT WorkGPT", MCP_IMPORT_TRUSTED_REDIRECT);
     let token = seed_oauth_access_token(&db, &client, &user, "project:write");
     let project_tmp = tempfile::tempdir().unwrap();
     let (runtime, registry) = mcp_import_runtime(project_tmp.path(), Some("alice")).await;
@@ -1259,8 +1255,7 @@ async fn oauth_mcp_file_import_trusted_download_guards_remain_bounded_impl() {
     let _lock = lock_mcp_import_test().await;
     let (_db_tmp, db) = test_db();
     let user = seed_user(&db, "alice");
-    let client =
-        seed_mcp_import_client(&db, &user, "ChatGPT WorkGPT", MCP_IMPORT_TRUSTED_REDIRECT);
+    let client = seed_mcp_import_client(&db, &user, "ChatGPT WorkGPT", MCP_IMPORT_TRUSTED_REDIRECT);
     let token = seed_oauth_access_token(&db, &client, &user, "project:write");
     let project_tmp = tempfile::tempdir().unwrap();
     let (runtime, _registry) = mcp_import_runtime(project_tmp.path(), Some("alice")).await;

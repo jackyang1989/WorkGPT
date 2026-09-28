@@ -233,21 +233,20 @@ impl NativeEnvironment {
             .unwrap()
             .installed = true;
         store.write_json("tunnel.json", &profiles)?;
-        if ServiceManager::inspect(&spec)
-            .map_err(service_error)?
-            .running
-            != Some(true)
-        {
+        let current_status = ServiceManager::inspect(&spec).map_err(service_error)?;
+        let status = if current_status.running == Some(true) {
+            current_status
+        } else {
             write_tunnel_health(&health, false, false)?;
-        }
-        let status = crate::privilege::service_operation_spec(
-            store,
-            &record,
-            spec.clone(),
-            ServiceOperation::Start,
-            None,
-        )
-        .await?;
+            crate::privilege::service_operation_spec(
+                store,
+                &record,
+                spec.clone(),
+                ServiceOperation::Start,
+                None,
+            )
+            .await?
+        };
         wait_tunnel_readiness(&spec).await?;
         profiles
             .iter_mut()
@@ -358,6 +357,12 @@ impl NativeEnvironment {
                 "tunnel_owner",
                 "This Tunnel service is not owned by the saved profile",
             ));
+        }
+        if operation == ServiceOperation::Start && status.running == Some(true) {
+            return Ok(status);
+        }
+        if operation == ServiceOperation::Stop && status.running == Some(false) {
+            return Ok(status);
         }
         if operation == ServiceOperation::Restart
             || operation == ServiceOperation::Start && status.running != Some(true)

@@ -131,11 +131,7 @@ fn verify_checksums(
             .artifacts
             .get(&platform)
             .ok_or(UpdateError::ManifestInvalid)?;
-        let runtime_name = format!(
-            "workgpt-v{}-{}.tar.gz",
-            manifest.version,
-            platform.as_str()
-        );
+        let runtime_name = format!("workgpt-v{}-{}.tar.gz", manifest.version, platform.as_str());
         if sums.get(runtime_name.as_str()).copied() != Some(runtime.sha256.as_str()) {
             return Err(UpdateError::ChecksumMismatch);
         }

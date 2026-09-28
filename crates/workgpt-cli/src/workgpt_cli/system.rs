@@ -684,11 +684,7 @@ mod tests {
         let token_file = temp.path().join("user-token");
         let env_file = temp.path().join("workgpt.env");
         std::fs::write(&token_file, "file-token\n").unwrap();
-        std::fs::write(
-            &env_file,
-            "WORKGPT_TOKEN=env-token\nWORKGPT_PAT=env-pat\n",
-        )
-        .unwrap();
+        std::fs::write(&env_file, "WORKGPT_TOKEN=env-token\nWORKGPT_PAT=env-pat\n").unwrap();
 
         let explicit = Some("explicit-token".to_string());
         let selected = resolve_user_api_token(
@@ -714,11 +710,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let env_file = temp.path().join("workgpt.env");
 
-        std::fs::write(
-            &env_file,
-            "WORKGPT_TOKEN=env-token\nWORKGPT_PAT=env-pat\n",
-        )
-        .unwrap();
+        std::fs::write(&env_file, "WORKGPT_TOKEN=env-token\nWORKGPT_PAT=env-pat\n").unwrap();
         let selected = resolve_user_api_token(&None, &None, &Some(env_file.clone())).unwrap();
         assert!(selected.as_deref() == Some("env-token"));
 

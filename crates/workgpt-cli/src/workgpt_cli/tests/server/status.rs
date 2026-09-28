@@ -273,10 +273,7 @@ async fn server_status_connection_failure_reports_unreachable_without_token() {
     handle.join().unwrap();
     assert!(output.contains("HTTP reachable:        no"));
     assert!(output.contains("Server: unreachable"), "{output}");
-    assert!(
-        output.contains("workgpt server run --env-file"),
-        "{output}"
-    );
+    assert!(output.contains("workgpt server run --env-file"), "{output}");
     assert!(output.contains("HTTP error:"));
     assert!(!output.contains(token));
 }

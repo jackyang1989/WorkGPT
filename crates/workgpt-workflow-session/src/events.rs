@@ -1072,8 +1072,7 @@ pub fn validation_output_summary_for_tool_result(tool_name: &str, output: &Value
             summary["zero_tests_run"] = cargo_test_zero_tests_run(output);
         }
     }
-    if execution_policy.detail == workgpt_tool_contracts::ToolAuditExecutionDetail::TestAssertions
-    {
+    if execution_policy.detail == workgpt_tool_contracts::ToolAuditExecutionDetail::TestAssertions {
         if let Some(require_tests) = output.get("require_tests").and_then(Value::as_bool) {
             summary["require_tests"] = json!(require_tests);
         }
@@ -1188,8 +1187,7 @@ pub(super) fn sanitize_persisted_validation_output_summary(
             summary["zero_tests_run"] = persisted_cargo_test_zero_tests_run(object);
         }
     }
-    if execution_policy.detail == workgpt_tool_contracts::ToolAuditExecutionDetail::TestAssertions
-    {
+    if execution_policy.detail == workgpt_tool_contracts::ToolAuditExecutionDetail::TestAssertions {
         if let Some(require_tests) = object.get("require_tests").and_then(Value::as_bool) {
             summary["require_tests"] = json!(require_tests);
         }
