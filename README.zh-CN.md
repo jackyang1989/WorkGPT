@@ -148,10 +148,6 @@ agent 辅助阅读、修改和验证仓库。
 Bug 报告需要提供哪些信息、自助修复流程、验证要求与 PR 说明见
 [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md)。
 
-## 致谢
-
-感谢 [LINUX DO](https://linux.do/) 社区提供友好的技术交流与开源分享环境。
-
 ## 许可证
 
 使用 Apache License 2.0，见 [LICENSE](LICENSE)。
