@@ -1,0 +1,245 @@
+version = 1
+
+[layers]
+leaf = 0
+domain = 1
+runtime = 2
+application = 3
+composition = 4
+entrypoint = 5
+
+[root_test_support]
+feature = "root-test-support"
+providers = [
+    "workgpt-runner-registry",
+    "workgpt-store",
+    "workgpt-tool-contracts",
+    "workgpt-workflow-session",
+]
+
+[forbidden_external_dependencies]
+workgpt-cli = ["quinn", "rusqlite", "salvo"]
+workgpt-core = ["quinn", "rusqlite", "salvo"]
+workgpt-runner = ["rusqlite", "salvo"]
+
+[packages.workgpt]
+layer = "composition"
+role = "Server composition and protocol adapters."
+normal = [
+    "workgpt-admin",
+    "workgpt-code-mode",
+    "workgpt-core",
+    "workgpt-environment",
+    "workgpt-runner-config",
+    "workgpt-runner-registry",
+    "workgpt-store",
+    "workgpt-tool-contracts",
+    "workgpt-tool-runtime-contracts",
+    "workgpt-validation",
+    "workgpt-workflow-session",
+    "workgpt-workspace",
+]
+dev = [
+    "workgpt-runner-registry",
+    "workgpt-store",
+    "workgpt-tool-contracts",
+    "workgpt-workflow-session",
+]
+build = []
+test_support = [
+    "workgpt-runner-registry",
+    "workgpt-store",
+    "workgpt-tool-contracts",
+    "workgpt-workflow-session",
+]
+
+[packages.workgpt-admin]
+layer = "leaf"
+role = "Standalone operator/admin HTTP client support."
+normal = []
+dev = []
+build = []
+test_support = []
+
+[packages.workgpt-browser]
+layer = "domain"
+role = "First-class bounded CDP browser runtime built on process lifecycle primitives."
+normal = ["workgpt-process"]
+dev = []
+build = []
+test_support = []
+
+[packages.workgpt-cli]
+layer = "entrypoint"
+role = "User-facing CLI entrypoint over server composition and shared setup helpers."
+normal = [
+    "workgpt",
+    "workgpt-admin",
+    "workgpt-core",
+    "workgpt-environment",
+    "workgpt-runner-config",
+]
+dev = []
+build = []
+test_support = []
+
+[packages.workgpt-code-mode]
+layer = "runtime"
+role = "Experimental transport-neutral Code Mode frontend/runtime and bounded V8 orchestration."
+normal = []
+dev = []
+build = []
+test_support = []
+
+[packages.workgpt-computer]
+layer = "leaf"
+role = "Platform-native computer-use primitives."
+normal = ["workgpt-core"]
+dev = []
+build = []
+test_support = []
+
+[packages.workgpt-core]
+layer = "leaf"
+role = "Shared contracts and low-level helpers with no workspace dependencies."
+normal = []
+dev = []
+build = []
+test_support = []
+
+[packages.workgpt-environment]
+layer = "runtime"
+role = "Shared environment setup, recovery, and persistent service lifecycle."
+normal = [
+    "workgpt-core",
+    "workgpt-runner-config",
+]
+dev = []
+build = []
+test_support = []
+
+[packages.workgpt-lsp]
+layer = "domain"
+role = "Native bounded Language Server Protocol lifecycle and semantic navigation."
+normal = [
+    "workgpt-core",
+    "workgpt-process",
+    "workgpt-runner-config",
+]
+dev = []
+build = []
+test_support = []
+
+[packages.workgpt-persistent-shell]
+layer = "domain"
+role = "Persistent local shell lifecycle built on process primitives."
+normal = ["workgpt-process"]
+dev = []
+build = []
+test_support = []
+
+[packages.workgpt-process]
+layer = "leaf"
+role = "OS process-tree ownership and lifecycle primitives."
+normal = []
+dev = []
+build = []
+test_support = []
+
+[packages.workgpt-runner]
+layer = "runtime"
+role = "Runner executable/runtime composition for local project execution."
+normal = [
+    "workgpt-browser",
+    "workgpt-computer",
+    "workgpt-core",
+    "workgpt-environment",
+    "workgpt-lsp",
+    "workgpt-persistent-shell",
+    "workgpt-process",
+    "workgpt-runner-config",
+    "workgpt-validation",
+    "workgpt-workspace",
+]
+dev = []
+build = []
+test_support = []
+
+[packages.workgpt-runner-config]
+layer = "domain"
+role = "Runner configuration contracts and parsing."
+normal = ["workgpt-core"]
+dev = []
+build = []
+test_support = []
+
+[packages.workgpt-runner-registry]
+layer = "domain"
+role = "Server-side Runner registry, connection lease, queue, and reconciliation domain."
+normal = ["workgpt-core"]
+dev = []
+build = []
+test_support = []
+
+[packages.workgpt-store]
+layer = "domain"
+role = "Durable SQLite-backed persistence ownership."
+normal = ["workgpt-core"]
+dev = []
+build = []
+test_support = []
+
+[packages.workgpt-tool-contracts]
+layer = "domain"
+role = "Protocol-neutral tool schemas and parsing contracts."
+normal = ["workgpt-core"]
+dev = []
+build = []
+test_support = []
+
+[packages.workgpt-tool-runtime-contracts]
+layer = "runtime"
+role = "Tool runtime result, recorder metadata, and audit contracts."
+normal = [
+    "workgpt-core",
+    "workgpt-tool-contracts",
+    "workgpt-workflow-session",
+]
+dev = []
+build = []
+test_support = []
+
+[packages.workgpt-validation]
+layer = "domain"
+role = "Validation recipes, adapters, and evidence domain."
+normal = [
+    "workgpt-core",
+    "workgpt-tool-contracts",
+    "workgpt-workflow-session",
+]
+dev = [
+    "workgpt-tool-contracts",
+    "workgpt-tool-runtime-contracts",
+    "workgpt-workflow-session",
+]
+build = []
+test_support = [
+    "workgpt-tool-contracts",
+    "workgpt-workflow-session",
+]
+
+[packages.workgpt-workflow-session]
+layer = "domain"
+role = "Workflow Session continuity, evidence, and handoff domain."
+normal = ["workgpt-core", "workgpt-tool-contracts"]
+dev = []
+build = []
+test_support = []
+
+[packages.workgpt-workspace]
+layer = "domain"
+role = "Registered project/workspace path and metadata contracts."
+normal = ["workgpt-core"]
+dev = []
+build = []
+test_support = []

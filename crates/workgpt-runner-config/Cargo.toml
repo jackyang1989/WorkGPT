@@ -1,0 +1,10 @@
+[package]
+name = "workgpt-runner-config"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+workgpt-core = { path = "../workgpt-core" }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"

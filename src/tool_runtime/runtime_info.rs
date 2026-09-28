@@ -1,0 +1,1646 @@
+//! Runtime observability metadata injected into `ToolRuntime`.
+
+use super::tool_definition::model_visible_tool_definitions;
+use super::{permissions, ToolResult, ToolRuntime};
+use crate::auth::AuthContext;
+use crate::runner_protocol::{RunnerView, ShellJobInfo};
+use serde_json::{json, Value};
+use workgpt_core::coding_agent::safe_provider_inventory;
+use workgpt_core::desktop_runtime_contract::{
+    build_alignment, runner_protocol_compatibility, ProtocolCompatibility, DESKTOP_RUNTIME_CONTRACT,
+};
+use workgpt_core::runner_job_lifecycle::RunnerJobLifecycle;
+
+const LIST_RUNNERS_MAX_CLIENT_IDS: usize = 8;
+const TARGET_CLIENT_ID_MAX_CHARS: usize = 128;
+
+#[derive(Debug, Default)]
+pub(crate) struct ListRunnersOptions {
+    pub(crate) client_id: Option<String>,
+    pub(crate) client_ids: Option<Vec<String>>,
+    pub(crate) include_projects: Option<bool>,
+    pub(crate) summary_only: bool,
+}
+
+/// Lightweight runtime metadata injected into `ToolRuntime` so observability
+/// tools (e.g. `runtime_status`) can report bounded auth/OAuth/public-url state
+/// without the runtime holding a full `Config` (which would couple it to HTTP/fs details).
+///
+/// `configured_public_url` is `None` when `WORKGPT_PUBLIC_URL` is unset; the
+/// observability output reports this as `null` so a deployer can immediately
+/// see that the public URL has not been configured.
+#[derive(Debug, Clone)]
+pub struct RuntimeInfo {
+    pub auth_enabled: bool,
+    /// Raw base flag (`WORKGPT_SHARED_KEY_ENABLED`) captured at Runtime
+    /// construction, before the remote-boundary policy is applied.
+    pub shared_key_configured: bool,
+    /// Effective direct shared-key policy captured at Runtime construction.
+    /// Unlike `shared_key_configured`, this is false at a remote boundary
+    /// unless the explicit remote opt-in is configured.
+    pub shared_key_enabled: bool,
+    /// Raw explicit remote opt-in (`WORKGPT_SHARED_KEY_REMOTE_ENABLED`)
+    /// captured at Runtime construction.
+    pub shared_key_remote_enabled: bool,
+    pub configured_public_url: Option<String>,
+    pub oauth2_enabled: bool,
+    pub oauth2_shared_key_bridge_enabled: bool,
+    pub quic: Option<std::sync::Arc<std::sync::Mutex<crate::config::QuicRuntimeStatus>>>,
+    /// Effective MCP compact-schema mode captured when this Runtime was built.
+    /// MCP request dispatch and `runtime_status` read this snapshot rather than
+    /// re-reading process-global environment, so a running Runtime's protocol
+    /// surface does not drift when the environment changes after startup.
+    pub mcp_compact_schemas: bool,
+    /// Effective MCP App exposure flag captured when this Runtime was built.
+    /// Same startup-snapshot semantics as [`Self::mcp_compact_schemas`].
+    pub mcp_apps_enabled: bool,
+    /// Effective MCP text-JSON compatibility projection captured at Runtime
+    /// construction. Ordinary tool-result framing must not re-read ambient env.
+    pub mcp_text_json_compat_enabled: bool,
+}
+
+impl RuntimeInfo {
+    /// Build test runtime metadata from the same parsed `Config` used by
+    /// production startup, plus the public URL and QUIC runtime configuration.
+    #[cfg(test)]
+    pub fn from_env() -> Self {
+        let config = crate::config::Config::from_env();
+        Self::from_config_with_quic_config(&config, &crate::config::QuicServerConfig::from_env())
+    }
+
+    pub fn from_config_with_quic_config(
+        config: &crate::config::Config,
+        quic_cfg: &crate::config::QuicServerConfig,
+    ) -> Self {
+        let auth_enabled = config.is_auth_enabled();
+        let configured_public_url = std::env::var("WORKGPT_PUBLIC_URL")
+            .ok()
+            .map(|s| s.trim().trim_end_matches('/').to_string())
+            .filter(|s| !s.is_empty());
+        Self {
+            auth_enabled,
+            shared_key_configured: crate::auth::shared_key_enabled(),
+            shared_key_enabled: crate::auth::direct_shared_key_enabled_with_quic(config, quic_cfg),
+            shared_key_remote_enabled: crate::auth::shared_key_remote_enabled(),
+            configured_public_url,
+            oauth2_enabled: config.oauth2.enabled,
+            oauth2_shared_key_bridge_enabled: config.oauth2.enabled
+                && config.oauth2.shared_key_bridge_enabled,
+            quic: Some(std::sync::Arc::new(std::sync::Mutex::new(
+                quic_cfg.runtime_status(),
+            ))),
+            mcp_compact_schemas: crate::model_surface::effective_mcp_compact_schemas(
+                crate::config::mcp_compact_schemas_override(),
+            ),
+            mcp_apps_enabled: crate::config::mcp_apps_enabled(),
+            mcp_text_json_compat_enabled: crate::config::mcp_text_json_compat_enabled(),
+        }
+    }
+}
+
+impl ToolRuntime {
+    pub(crate) fn effective_config_status(&self) -> Value {
+        json!({
+            "auth": {
+                "shared_key_configured": self.runtime_info.auth_enabled
+                    && self.runtime_info.shared_key_configured,
+                "shared_key_enabled": self.runtime_info.auth_enabled
+                    && self.runtime_info.shared_key_enabled,
+                "shared_key_remote_enabled": self.runtime_info.auth_enabled
+                    && self.runtime_info.shared_key_remote_enabled,
+                "anonymous_enabled": self.runtime_info.auth_enabled
+                    && crate::auth::allow_anonymous_enabled(),
+                "oauth2_enabled": self.runtime_info.oauth2_enabled,
+                "oauth2_shared_key_bridge_enabled": self.runtime_info.oauth2_shared_key_bridge_enabled,
+            },
+            "mcp_host": {
+                "profile": self.mcp_host_policy.profile.as_str(),
+                "host_budget_secs": self.mcp_host_policy.host_budget_secs,
+                "initial_job_handoff_secs": self.mcp_host_policy.initial_job_handoff_secs,
+                "max_sync_wait_secs": self.mcp_host_policy.max_sync_wait_secs,
+                "continuation_wait_secs": self.mcp_host_policy.continuation_wait_secs,
+            },
+            "tool_request_trace_mode": crate::config::tool_request_trace_mode().as_str(),
+        })
+    }
+
+    pub(crate) async fn list_runners(&self, auth: Option<&AuthContext>) -> ToolResult {
+        self.list_runners_with_options(auth, ListRunnersOptions::default())
+            .await
+    }
+
+    pub(crate) async fn list_runners_with_options(
+        &self,
+        auth: Option<&AuthContext>,
+        options: ListRunnersOptions,
+    ) -> ToolResult {
+        if options.client_id.is_some() && options.client_ids.is_some() {
+            return ToolResult::err_with_output(
+                "invalid_client_filter: client_id and client_ids are mutually exclusive"
+                    .to_string(),
+                json!({"error_kind": "invalid_client_filter"}),
+            );
+        }
+        if options
+            .client_id
+            .as_deref()
+            .is_some_and(|value| !valid_target_client_id(value))
+        {
+            return ToolResult::err_with_output(
+                "invalid_client_id: client_id must contain 1..=128 characters".to_string(),
+                json!({"error_kind": "invalid_client_id"}),
+            );
+        }
+        if let Some(client_ids) = options.client_ids.as_ref() {
+            if client_ids.is_empty() {
+                return ToolResult::err_with_output(
+                    "invalid_client_ids: at least one client id is required".to_string(),
+                    json!({"error_kind": "invalid_client_ids"}),
+                );
+            }
+            if client_ids.len() > LIST_RUNNERS_MAX_CLIENT_IDS {
+                return ToolResult::err_with_output(
+                    format!(
+                        "invalid_client_ids: at most {LIST_RUNNERS_MAX_CLIENT_IDS} client ids are allowed"
+                    ),
+                    json!({"error_kind": "invalid_client_ids"}),
+                );
+            }
+            let mut seen = std::collections::HashSet::new();
+            for client_id in client_ids {
+                if !valid_target_client_id(client_id) {
+                    return ToolResult::err_with_output(
+                        "invalid_client_ids: every client id must contain 1..=128 characters"
+                            .to_string(),
+                        json!({"error_kind": "invalid_client_ids"}),
+                    );
+                }
+                if !seen.insert(client_id.as_str()) {
+                    return ToolResult::err_with_output(
+                        "invalid_client_ids: duplicate client ids are not allowed".to_string(),
+                        json!({"error_kind": "invalid_client_ids"}),
+                    );
+                }
+            }
+        }
+
+        let access = crate::runner_http::runner_access_from_auth(auth);
+        let mut clients = self
+            .runner_registry
+            .list_runners_for_auth(access.as_ref())
+            .await;
+        clients.sort_by(|a, b| a.client_id.cmp(&b.client_id));
+        clients.retain(|client| {
+            if let Some(expected) = options.client_id.as_deref() {
+                return client.client_id == expected;
+            }
+            if let Some(expected) = options.client_ids.as_ref() {
+                return expected
+                    .iter()
+                    .any(|client_id| client_id == &client.client_id);
+            }
+            true
+        });
+        let mut runner_jobs = self
+            .runner_registry
+            .list_all_jobs_for_auth(access.as_ref())
+            .await;
+        if options.client_id.is_some() || options.client_ids.is_some() {
+            runner_jobs.retain(|job| {
+                clients
+                    .iter()
+                    .any(|client| client.client_id == job.client_id)
+            });
+        }
+        let now = chrono::Utc::now().timestamp();
+        let include_projects = options.include_projects.unwrap_or(true);
+        let runners: Vec<Value> = if options.summary_only {
+            clients
+                .iter()
+                .map(|client| {
+                    let mut value = json!({
+                        "client_id": client.client_id,
+                        "runner_instance_id": client.runner_instance_id,
+                        "display_name": client.display_name,
+                        "status": client.status,
+                        "connected": client.connected,
+                        "runner_protocol_generation": client.runner_protocol_generation.get(),
+                        "transport": client.transport,
+                        "last_seen_age_secs": last_seen_age_secs(client, now),
+                        "pending_requests": client.pending_requests,
+                        "projects_count": enabled_projects_count(client),
+                        "project_inventory": client.project_inventory,
+                        "active_jobs": active_jobs_for_client(&runner_jobs, &client.client_id),
+                        "job_concurrency": job_concurrency_for_client(client, &runner_jobs),
+                        "build": client.build,
+                        "coding_agent_providers": safe_provider_inventory(client.coding_agent_providers.as_deref()),
+                    });
+                    if let Some(availability) = client.computer_session_availability {
+                        value["computer_session_availability"] = json!(availability);
+                    }
+                    value
+                })
+                .collect()
+        } else {
+            clients
+                .iter()
+                .map(|client| {
+                    let mut value = json!({
+                        "client_id": client.client_id,
+                        "runner_instance_id": client.runner_instance_id,
+                        "display_name": client.display_name,
+                        "owner": client.owner,
+                        "hostname": client.hostname,
+                        "host_context": host_context_projection(client.host_context.as_ref()),
+                        "status": client.status,
+                        "connected": client.connected,
+                        "runner_protocol_generation": client.runner_protocol_generation.get(),
+                        "transport": client.transport,
+                        "last_seen": client.last_seen,
+                        "last_seen_age_secs": last_seen_age_secs(client, now),
+                        "pending_requests": client.pending_requests,
+                        "projects_count": enabled_projects_count(client),
+                        "project_inventory": client.project_inventory,
+                        "active_jobs": active_jobs_for_client(&runner_jobs, &client.client_id),
+                        "job_concurrency": job_concurrency_for_client(client, &runner_jobs),
+                        "build": client.build,
+                        "capabilities": client.capabilities,
+                        "coding_agent_providers": safe_provider_inventory(client.coding_agent_providers.as_deref()),
+                        "policy": sanitized_policy_summary(client.policy.as_ref()),
+                        "shell_profiles": sanitized_shell_profiles_summary(
+                            client.policy.as_ref().and_then(|policy| policy.shell_profiles.as_ref())
+                        ),
+                        "tool_providers": client.policy.as_ref().and_then(|policy| policy.tool_providers.as_ref()),
+                    });
+                    if let Some(availability) = client.computer_session_availability {
+                        value["computer_session_availability"] = json!(availability);
+                    }
+                    if include_projects {
+                        value["projects"] = json!(client.projects);
+                    }
+                    value
+                })
+                .collect()
+        };
+        if options.summary_only {
+            let online = clients.iter().filter(|client| client.connected).count();
+            let stale = clients
+                .iter()
+                .filter(|client| client.status == "stale")
+                .count();
+            return ToolResult::ok(json!({
+                // One canonical Runner collection for Console, admin/ops, and model consumers.
+                "runners": runners,
+                "summary": {
+                    "count": clients.len(),
+                    "online": online,
+                    "offline": clients.len().saturating_sub(online),
+                    "stale": stale,
+                },
+                "count": clients.len(),
+            }));
+        }
+        ToolResult::ok(json!({
+            // One canonical Runner collection for Console, admin/ops, and model consumers.
+            "runners": runners,
+            "summary": runner_health_summary(&clients),
+            "count": clients.len(),
+        }))
+    }
+
+    /// Build the runtime observability summary. Read-only; never exposes
+    /// tokens, api keys, full env, complete project path lists, or
+    /// stdout/stderr. Returns a structured JSON object with service metadata,
+    /// Runner-registered Project status, Runner summaries, and Job counts.
+    pub(crate) fn runtime_status<'a>(
+        &'a self,
+        auth: Option<&'a AuthContext>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ToolResult> + Send + 'a>> {
+        // Runtime status aggregates fleet, project, Job, connection, build, and
+        // configuration state. Keep that aggregate future off caller stacks so
+        // nested startup/admin/status flows remain bounded under workspace-wide
+        // dependency feature unification.
+        Box::pin(async move { self.runtime_status_inner(auth, false).await })
+    }
+
+    async fn runtime_status_inner(&self, auth: Option<&AuthContext>, sparse: bool) -> ToolResult {
+        let access = crate::runner_http::runner_access_from_auth(auth);
+        let clients = self
+            .runner_registry
+            .list_runners_for_auth(access.as_ref())
+            .await;
+
+        let runner_jobs = self
+            .runner_registry
+            .list_all_jobs_for_auth(access.as_ref())
+            .await;
+
+        if sparse {
+            return ToolResult::ok(self.sparse_runtime_status(&clients, &runner_jobs, None));
+        }
+
+        // -- Projects summary -------------------------------------------------
+        let runner_registered_count: usize = clients
+            .iter()
+            .map(|client| {
+                client
+                    .projects
+                    .iter()
+                    .filter(|project| !project.disabled)
+                    .count()
+            })
+            .sum();
+        let runner_registered_online_count: usize = clients
+            .iter()
+            .filter(|client| client.connected)
+            .map(|client| {
+                client
+                    .projects
+                    .iter()
+                    .filter(|project| !project.disabled)
+                    .count()
+            })
+            .sum();
+        let effective_count = runner_registered_count;
+        let effective_status = if effective_count > 0 {
+            "ok"
+        } else {
+            "no_projects"
+        };
+        let projects = json!({
+            // Observation naming is separate from list_projects.source provenance.
+            "mode": "runner_registered",
+            "runner_registered": {
+                "count": runner_registered_count,
+                "online_count": runner_registered_online_count,
+            },
+            "effective": {
+                "count": effective_count,
+                "status": effective_status,
+            },
+            "count": effective_count,
+        });
+
+        let now = chrono::Utc::now().timestamp();
+        // -- Runners summary --------------------------------------------------
+        // Build a trimmed client list so the summary never leaks per-request
+        // state. Only carry fields useful for observability. `last_seen` is a
+        // unix timestamp (seconds) of the most recent heartbeat/result; the
+        // console uses it to render how stale a Runner is and to make a
+        // websocket Runner flipping `online` -> `stale` visually obvious.
+        let runner_count = clients.len();
+        let online_count = clients.iter().filter(|c| c.connected).count();
+        // `stale_count` = registered Runners whose `last_seen` is older than the
+        // online window (status == "stale"). Truly offline Runners are removed
+        // from the registry on disconnect, so they never appear here.
+        let stale_count = runner_count.saturating_sub(online_count);
+        let clients_summary: Vec<Value> = clients
+            .iter()
+            .map(|client| runtime_status_client_summary(client, &runner_jobs, now))
+            .collect();
+        let runners = runtime_status_runners_summary(
+            runner_count,
+            online_count,
+            stale_count,
+            clients_summary,
+            runner_health_summary(&clients),
+        );
+        let connection_layers = connection_layers(
+            &clients,
+            runner_registered_count,
+            runner_registered_online_count,
+            self.observations.as_ref(),
+            auth,
+            now,
+        );
+        let version_compatibility = version_compatibility(&clients);
+
+        // -- jobs summary -----------------------------------------------------
+        // Registered Project jobs are Runner-owned. Active includes same-runner
+        // `recovering` jobs during restart/reconnect reconciliation.
+        let jobs = runtime_job_counts(&runner_jobs);
+
+        // -- tools summary ----------------------------------------------------
+        let tools_names: Vec<String> = model_visible_tool_definitions()
+            .map(|definition| definition.name.to_string())
+            .collect();
+        let tools_count = tools_names.len();
+        let tools = json!({
+            "count": tools_count,
+            "names": tools_names,
+        });
+
+        let quic = self.runtime_info.quic.as_ref().map(|status| {
+            let status = status.lock().expect("quic runtime status mutex poisoned");
+            json!({
+                "enabled": status.enabled,
+                "listen": status.listen,
+                "alpn": status.alpn,
+                "listener_started": status.listener_started,
+                "last_error": status.last_error,
+            })
+        });
+
+        // Keep the top-level status assembly incremental. A single large `json!`
+        // here materially inflates the debug async poll frame on fresh builds and
+        // can overflow the default Tokio worker stack once a Runner is registered.
+        let mut output = serde_json::Map::with_capacity(18);
+        output.insert("service".to_string(), json!("workgpt"));
+        output.insert(
+            "mcp_compact_schemas".to_string(),
+            json!(self.runtime_info.mcp_compact_schemas),
+        );
+        output.insert(
+            "effective_config".to_string(),
+            self.effective_config_status(),
+        );
+        output.insert("version".to_string(), json!(env!("CARGO_PKG_VERSION")));
+        output.insert(
+            "desktop_runtime_contract".to_string(),
+            json!(DESKTOP_RUNTIME_CONTRACT),
+        );
+        output.insert(
+            "build".to_string(),
+            json!(crate::build_info::runtime_build_info()),
+        );
+        output.insert("server_time".to_string(), json!(now));
+        output.insert("pid".to_string(), json!(std::process::id()));
+        output.insert(
+            "auth_enabled".to_string(),
+            json!(self.runtime_info.auth_enabled),
+        );
+        output.insert(
+            "configured_public_url".to_string(),
+            json!(self.runtime_info.configured_public_url),
+        );
+        output.insert("projects".to_string(), projects);
+        // Runtime Console, admin HTTP, and CLI ops consume this established key.
+        output.insert("runners".to_string(), runners);
+        output.insert("connection_layers".to_string(), connection_layers);
+        output.insert(
+            "protocol_compatibility".to_string(),
+            version_compatibility["protocol_compatibility"].clone(),
+        );
+        output.insert(
+            "build_alignment".to_string(),
+            version_compatibility["build_alignment"].clone(),
+        );
+        output.insert("version_compatibility".to_string(), version_compatibility);
+        output.insert("jobs".to_string(), jobs);
+        output.insert("tools".to_string(), tools);
+        output.insert(
+            "authority".to_string(),
+            permissions::authority_profile_payload(),
+        );
+        output.insert("session_store".to_string(), json!(self.sessions.status()));
+        if let Some(quic) = quic {
+            output.insert("quic".to_string(), quic);
+        }
+        ToolResult::ok(Value::Object(output))
+    }
+
+    pub(crate) async fn runtime_status_with_options(
+        &self,
+        auth: Option<&AuthContext>,
+        compact: bool,
+        summary_only: bool,
+        client_id: Option<String>,
+    ) -> ToolResult {
+        let sparse = compact || summary_only;
+        match client_id {
+            Some(client_id) => {
+                self.runtime_status_for_client(auth, client_id, sparse)
+                    .await
+            }
+            None => Box::pin(self.runtime_status_inner(auth, sparse)).await,
+        }
+    }
+
+    fn sparse_runtime_status(
+        &self,
+        clients: &[RunnerView],
+        jobs: &[ShellJobInfo],
+        focus: Option<&RunnerView>,
+    ) -> Value {
+        let build = crate::build_info::runtime_build_info();
+        let projects: usize = clients.iter().map(enabled_projects_count).sum();
+        let online_projects: usize = clients
+            .iter()
+            .filter(|c| c.connected)
+            .map(enabled_projects_count)
+            .sum();
+        let compatibility = version_compatibility_against(
+            clients,
+            env!("CARGO_PKG_VERSION"),
+            build.git_commit,
+            build.git_dirty,
+            Value::Null,
+            false,
+        );
+        let connection = connection_states(clients, projects, online_projects);
+        let mut result = json!({
+            "service": "workgpt",
+            "version": env!("CARGO_PKG_VERSION"),
+            "build": {"git_commit": build.git_commit, "git_dirty": build.git_dirty},
+            "mcp_host": {"profile": self.mcp_host_policy.profile.as_str()},
+            "projects": {"count": projects, "online_count": online_projects, "status": if projects > 0 { "ok" } else { "no_projects" }},
+            "jobs": sparse_job_counts(&runtime_job_counts(jobs)),
+            "connection": connection
+        });
+        if let Some(client) = focus {
+            result["focus"] = json!({
+                "client_id": client.client_id,
+                "connected": client.connected,
+                "status": client.status,
+                "project_count": projects,
+                "job_concurrency": job_concurrency_for_client(client, jobs),
+                "runner_protocol_generation": client.runner_protocol_generation.get(),
+                "protocol_compatibility": compatibility["protocol_compatibility"],
+                "build_alignment": compatibility["build_alignment"],
+                "source_alignment": compatibility["source_alignment"]["status"]
+            });
+        } else {
+            result["runners"] = json!({
+                "count": clients.len(),
+                "online_count": clients.iter().filter(|c| c.connected).count(),
+                "stale_count": clients.iter().filter(|c| c.status == "stale").count()
+            });
+            result["compatibility"] = json!({
+                "protocol": compatibility["protocol_compatibility"],
+                "build_alignment": compatibility["build_alignment"],
+                "source_alignment": compatibility["source_alignment"]["status"],
+                "mixed_builds_present": compatibility["mixed_builds_present"]
+            });
+        }
+        result
+    }
+
+    async fn runtime_status_for_client(
+        &self,
+        auth: Option<&AuthContext>,
+        client_id: String,
+        sparse: bool,
+    ) -> ToolResult {
+        if !valid_target_client_id(&client_id) {
+            return ToolResult::err_with_output(
+                "invalid_client_id: client_id must contain 1..=128 characters".to_string(),
+                json!({"error_kind": "invalid_client_id"}),
+            );
+        }
+        let access = crate::runner_http::runner_access_from_auth(auth);
+        let visible_clients = self
+            .runner_registry
+            .list_runners_for_auth(access.as_ref())
+            .await;
+        let Some(client) = visible_clients
+            .iter()
+            .find(|client| client.client_id == client_id)
+        else {
+            return ToolResult::err_with_output(
+                "unknown_client_id: no caller-visible Runner matches the exact client_id"
+                    .to_string(),
+                json!({"error_kind": "unknown_client_id", "client_id": client_id}),
+            );
+        };
+        let visible_jobs = self
+            .runner_registry
+            .list_all_jobs_for_auth(access.as_ref())
+            .await;
+        let selected_jobs: Vec<ShellJobInfo> = visible_jobs
+            .into_iter()
+            .filter(|job| job.client_id == client.client_id)
+            .collect();
+        let clients = std::slice::from_ref(client);
+        if sparse {
+            return ToolResult::ok(self.sparse_runtime_status(
+                clients,
+                &selected_jobs,
+                Some(client),
+            ));
+        }
+        let now = chrono::Utc::now().timestamp();
+        let project_count = enabled_projects_count(client);
+        let online_project_count = if client.connected { project_count } else { 0 };
+        let target_compatibility = version_compatibility(clients);
+        let target_runner = target_compatibility
+            .pointer("/runners/0")
+            .cloned()
+            .unwrap_or(Value::Null);
+        let source_alignment = target_runner
+            .get("source_alignment")
+            .cloned()
+            .unwrap_or_else(|| json!({"status": "unknown"}));
+        let fleet_compatibility = version_compatibility(&visible_clients);
+        let fleet_runners = fleet_compatibility
+            .get("runners")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let mismatched_runners_count = fleet_runners
+            .iter()
+            .filter(|runner| runner.get("status").and_then(Value::as_str) != Some("compatible"))
+            .count();
+        let source_mismatched_runners_count = fleet_runners
+            .iter()
+            .filter(|runner| {
+                runner
+                    .pointer("/source_alignment/status")
+                    .and_then(Value::as_str)
+                    == Some("different")
+            })
+            .count();
+        let jobs = runtime_job_counts(&selected_jobs);
+        let runner_active = jobs["active_count"].clone();
+        let projects = json!({
+            "mode": "runner_registered",
+            "runner_registered": {
+                "count": project_count,
+                "online_count": online_project_count,
+            },
+            "effective": {
+                "count": project_count,
+                "status": if project_count > 0 { "ok" } else { "no_projects" },
+            },
+            "count": project_count,
+        });
+        let runners = json!({
+            "count": 1,
+            "online_count": usize::from(client.connected),
+            "stale_count": usize::from(!client.connected),
+            "clients": [{
+                "client_id": client.client_id,
+                "runner_instance_id": client.runner_instance_id,
+                "display_name": client.display_name,
+                "status": client.status,
+                "connected": client.connected,
+                "runner_protocol_generation": client.runner_protocol_generation.get(),
+                "transport": client.transport,
+                "last_seen": client.last_seen,
+                "last_seen_age_secs": last_seen_age_secs(client, now),
+                "pending_requests": client.pending_requests,
+                "active_jobs": active_jobs_for_client(&selected_jobs, &client.client_id),
+                "job_concurrency": job_concurrency_for_client(client, &selected_jobs),
+                "projects_count": project_count,
+                "project_inventory": client.project_inventory,
+                "build": client.build,
+                "coding_agent_providers": safe_provider_inventory(client.coding_agent_providers.as_deref()),
+            }],
+            "summary": runner_health_summary(clients),
+        });
+        let tool_names: Vec<String> = model_visible_tool_definitions()
+            .map(|definition| definition.name.to_string())
+            .collect();
+        let tools = json!({
+            "count": tool_names.len(),
+            "names": tool_names,
+        });
+        let server_build = crate::build_info::runtime_build_info();
+        let focus = json!({
+            "client_id": client.client_id,
+            "connected": client.connected,
+            "status": client.status,
+            "runner_instance_id": client.runner_instance_id,
+            "build": client.build,
+            "coding_agent_providers": safe_provider_inventory(client.coding_agent_providers.as_deref()),
+            "project_count": project_count,
+            "active_jobs": runner_active,
+            "job_concurrency": job_concurrency_for_client(client, &selected_jobs),
+            "compatibility_status": target_runner.get("status").cloned().unwrap_or(Value::Null),
+            "protocol_compatibility": target_runner.get("protocol_compatibility").cloned().unwrap_or(Value::Null),
+            "build_alignment": target_runner.get("build_alignment").cloned().unwrap_or(Value::Null),
+            "runner_protocol_generation": client.runner_protocol_generation.get(),
+            "capabilities": client.capabilities,
+            "source_alignment": source_alignment,
+        });
+        let server = json!({
+            "version": env!("CARGO_PKG_VERSION"),
+            "build": server_build,
+            "desktop_runtime_contract": DESKTOP_RUNTIME_CONTRACT,
+        });
+        let fleet_summary = json!({
+            "visible_runner_count": visible_clients.len(),
+            "mismatched_runners_count": mismatched_runners_count,
+            "source_mismatched_runners_count": source_mismatched_runners_count,
+            "mixed_builds_present": mismatched_runners_count > 0 || source_mismatched_runners_count > 0,
+        });
+        // As above, avoid one large `json!` in this async poll frame so focused
+        // status requests retain the same bounded worker-stack behavior.
+        let mut output = serde_json::Map::with_capacity(17);
+        output.insert("service".to_string(), json!("workgpt"));
+        output.insert(
+            "mcp_compact_schemas".to_string(),
+            json!(self.runtime_info.mcp_compact_schemas),
+        );
+        output.insert(
+            "effective_config".to_string(),
+            self.effective_config_status(),
+        );
+        output.insert("version".to_string(), json!(env!("CARGO_PKG_VERSION")));
+        output.insert(
+            "desktop_runtime_contract".to_string(),
+            json!(DESKTOP_RUNTIME_CONTRACT),
+        );
+        output.insert("build".to_string(), json!(server_build));
+        output.insert("server_time".to_string(), json!(now));
+        output.insert("pid".to_string(), json!(std::process::id()));
+        output.insert(
+            "auth_enabled".to_string(),
+            json!(self.runtime_info.auth_enabled),
+        );
+        output.insert(
+            "configured_public_url".to_string(),
+            json!(self.runtime_info.configured_public_url),
+        );
+        output.insert("focus".to_string(), focus);
+        output.insert("server".to_string(), server);
+        output.insert("fleet_summary".to_string(), fleet_summary);
+        output.insert("projects".to_string(), projects);
+        output.insert("runners".to_string(), runners);
+        output.insert(
+            "protocol_compatibility".to_string(),
+            target_compatibility["protocol_compatibility"].clone(),
+        );
+        output.insert(
+            "build_alignment".to_string(),
+            target_compatibility["build_alignment"].clone(),
+        );
+        output.insert("version_compatibility".to_string(), target_compatibility);
+        output.insert("jobs".to_string(), jobs);
+        output.insert("tools".to_string(), tools);
+        output.insert(
+            "authority".to_string(),
+            permissions::authority_profile_payload(),
+        );
+        ToolResult::ok(Value::Object(output))
+    }
+}
+
+/// Startup already needs full status for its owning-Runner brief. Its model
+/// projection shares the sparse field selection without preserving inventories.
+pub(crate) fn compact_runtime_status(status: &Value) -> Value {
+    let mut result = json!({
+        "service": status["service"],
+        "version": status["version"],
+        "build": {"git_commit": status["build"]["git_commit"], "git_dirty": status["build"]["git_dirty"]},
+        "mcp_host": {"profile": status["effective_config"]["mcp_host"]["profile"]},
+        "runners": {
+            "count": status["runners"]["count"],
+            "online_count": status["runners"]["online_count"],
+            "stale_count": status["runners"]["stale_count"]
+        },
+        "projects": {
+            "count": status["projects"]["count"],
+            "online_count": status["projects"]["runner_registered"]["online_count"],
+            "status": status["projects"]["effective"]["status"]
+        },
+        "compatibility": {
+            "protocol": status["protocol_compatibility"],
+            "build_alignment": status["build_alignment"],
+            "source_alignment": status["version_compatibility"]["source_alignment"]["status"]
+        }
+    });
+    result["jobs"] = sparse_job_counts(&status["jobs"]);
+    result["connection"] = sparse_connection_layers(&status["connection_layers"]);
+    result
+}
+
+fn sparse_job_counts(jobs: &Value) -> Value {
+    let mut result = serde_json::Map::new();
+    for key in [
+        "active_count",
+        "running_count",
+        "queued_count",
+        "recovering_count",
+        "lost_after_reconcile_count",
+    ] {
+        if let Some(value) = jobs.get(key) {
+            result.insert(key.into(), value.clone());
+        }
+    }
+    Value::Object(result)
+}
+
+fn sparse_connection_layers(layers: &Value) -> Value {
+    let mut result = serde_json::Map::new();
+    for key in ["runner_process", "server_transport", "project_registry"] {
+        result.insert(key.into(), layers[key]["status"].clone());
+    }
+    Value::Object(result)
+}
+
+fn runtime_job_counts(runner_jobs: &[ShellJobInfo]) -> Value {
+    let runner_known_count = runner_jobs.len();
+    let active_count = runner_jobs
+        .iter()
+        .filter(|j| workgpt_runner_registry::job_status_is_active(&j.status))
+        .count();
+    let recovering_count = runner_jobs
+        .iter()
+        .filter(|job| job.status == "recovering")
+        .count();
+    let running_count = runner_jobs
+        .iter()
+        .filter(|job| job_status_is_running(&job.status))
+        .count();
+    let queued_count = runner_jobs
+        .iter()
+        .filter(|job| job_status_is_runner_queued(&job.status))
+        .count();
+    let reconciled_count = runner_jobs
+        .iter()
+        .filter(|job| job.recovery_state.as_deref() == Some("reconciled"))
+        .count();
+    let lost_after_reconcile_count = runner_jobs
+        .iter()
+        .filter(|job| {
+            job.status == "lost"
+                && matches!(
+                    job.recovery_reason_code.as_deref(),
+                    Some(
+                        "runner_inventory_missing"
+                            | "runner_instance_replaced"
+                            | "runner_recovery_deadline_exceeded"
+                    )
+                )
+        })
+        .count();
+    json!({
+        "count": runner_known_count,
+        "active_count": active_count,
+        "running_count": running_count,
+        "queued_count": queued_count,
+        "recovering_count": recovering_count,
+        "reconciled_count": reconciled_count,
+        "lost_after_reconcile_count": lost_after_reconcile_count,
+    })
+}
+
+fn host_context_projection(context: Option<&crate::runner_protocol::RunnerHostContext>) -> Value {
+    match context {
+        Some(context) => json!({
+            "source": "runner_config",
+            "role": context.role,
+            "runtime": context.runtime,
+            "service": context.service,
+            "network": context.network,
+            "architecture": context.architecture,
+        }),
+        None => Value::Null,
+    }
+}
+
+/// Stale threshold for runner-derived layers (heartbeat window).
+const RUNNER_STALE_AFTER_SECS: i64 = crate::runner_http::RUNNER_ONLINE_WINDOW_SECS;
+/// Stale threshold for connector/tool-call activity observations.
+const ACTIVITY_STALE_AFTER_SECS: i64 = 600;
+
+/// One connection-layer observation with the canonical contract fields:
+/// `status`, `observed_at`, `source`, `age_secs`, `stale_after_secs`,
+/// `reason_code`. Extra layer-specific facts are merged on top.
+fn layer_observation(
+    status: &str,
+    observed_at: Option<i64>,
+    source: &str,
+    stale_after_secs: Option<i64>,
+    reason_code: Option<&str>,
+    now: i64,
+    extra: Value,
+) -> Value {
+    let mut layer = json!({
+        "status": status,
+        "observed_at": observed_at,
+        "source": source,
+        "age_secs": observed_at.map(|at| now.saturating_sub(at)),
+        "stale_after_secs": stale_after_secs,
+        "reason_code": reason_code,
+    });
+    if let (Some(object), Some(extra)) = (layer.as_object_mut(), extra.as_object()) {
+        for (key, value) in extra {
+            object.insert(key.clone(), value.clone());
+        }
+    }
+    layer
+}
+
+#[derive(serde::Serialize)]
+struct ConnectionStates {
+    runner_process: &'static str,
+    server_transport: &'static str,
+    project_registry: &'static str,
+}
+
+fn connection_states(
+    clients: &[RunnerView],
+    registered_projects: usize,
+    online_projects: usize,
+) -> ConnectionStates {
+    let online = clients.iter().any(|client| client.connected);
+    ConnectionStates {
+        runner_process: if online {
+            "ready"
+        } else if clients.is_empty() {
+            "not_observed"
+        } else {
+            "stale"
+        },
+        server_transport: if online {
+            "connected"
+        } else if clients.is_empty() {
+            "not_observed"
+        } else {
+            "disconnected"
+        },
+        project_registry: if registered_projects == 0 {
+            "not_configured"
+        } else if online_projects > 0 {
+            "registered"
+        } else {
+            "stale"
+        },
+    }
+}
+
+fn connection_layers(
+    clients: &[RunnerView],
+    registered_projects: usize,
+    online_projects: usize,
+    observations: &super::observations::RuntimeObservations,
+    auth: Option<&AuthContext>,
+    now: i64,
+) -> Value {
+    let states = connection_states(clients, registered_projects, online_projects);
+    // Freshest client drives single-value observations; counts stay explicit.
+    let freshest = clients.iter().max_by_key(|c| c.last_seen);
+    let online: Vec<&RunnerView> = clients.iter().filter(|c| c.connected).collect();
+    let freshest_online = online.iter().max_by_key(|c| c.last_seen).copied();
+
+    // -- runner_process: process observation, distinct from transport --------
+    let runner_process = match (freshest_online, freshest) {
+        (Some(client), _) => {
+            let (source, reason) = if client.process_started_at.is_some() {
+                ("runner_process_report", None)
+            } else {
+                // Live transport still proves a running process; the runner
+                // just did not report its start identity.
+                ("transport_liveness", Some("process_start_not_reported"))
+            };
+            layer_observation(
+                states.runner_process,
+                Some(client.last_seen),
+                source,
+                Some(RUNNER_STALE_AFTER_SECS),
+                reason,
+                now,
+                json!({
+                    "client_id": client.client_id,
+                    "runner_instance_id": client.runner_instance_id,
+                    "process_started_at": client.process_started_at,
+                }),
+            )
+        }
+        (None, Some(client)) => layer_observation(
+            states.runner_process,
+            Some(client.last_seen),
+            "server_heartbeat_window",
+            Some(RUNNER_STALE_AFTER_SECS),
+            Some("heartbeat_expired"),
+            now,
+            json!({
+                "client_id": client.client_id,
+                "runner_instance_id": client.runner_instance_id,
+                "process_started_at": client.process_started_at,
+            }),
+        ),
+        (None, None) => layer_observation(
+            states.runner_process,
+            None,
+            "server_registry",
+            None,
+            Some("no_runner_registered"),
+            now,
+            json!({}),
+        ),
+    };
+
+    // -- server_transport: real connection lifecycle --------------------------
+    let server_transport = match (freshest_online, freshest) {
+        (Some(client), _) => layer_observation(
+            states.server_transport,
+            Some(client.last_seen),
+            "server_transport_lifecycle",
+            Some(RUNNER_STALE_AFTER_SECS),
+            None,
+            now,
+            json!({
+                "connected_clients": online.len(),
+                "transport": client.transport,
+                "connection_instance": client.runner_instance_id,
+                "connected_at": client.connected_at,
+                "last_heartbeat_at": client.last_seen,
+            }),
+        ),
+        (None, Some(client)) => layer_observation(
+            states.server_transport,
+            client.disconnected_at.or(Some(client.last_seen)),
+            "server_transport_lifecycle",
+            None,
+            Some("transport_closed_or_heartbeat_expired"),
+            now,
+            json!({
+                "connected_clients": 0,
+                "transport": client.transport,
+                "connection_instance": client.runner_instance_id,
+                "connected_at": client.connected_at,
+                "disconnected_at": client.disconnected_at,
+            }),
+        ),
+        (None, None) => layer_observation(
+            states.server_transport,
+            None,
+            "server_transport_lifecycle",
+            None,
+            Some("no_transport_ever_connected"),
+            now,
+            json!({"connected_clients": 0}),
+        ),
+    };
+
+    // -- server_registration: which instance registered, and is it current ---
+    let server_registration = match (freshest_online, freshest) {
+        (Some(client), _) => layer_observation(
+            "registered",
+            Some(client.registered_at),
+            "runner_registration",
+            None,
+            None,
+            now,
+            json!({
+                "registered_clients": clients.len(),
+                "runner_instance": client.runner_instance_id,
+                "registered_at": client.registered_at,
+                "last_refreshed_at": client.last_seen,
+            }),
+        ),
+        (None, Some(client)) => layer_observation(
+            "stale",
+            Some(client.registered_at),
+            "runner_registration",
+            Some(RUNNER_STALE_AFTER_SECS),
+            Some("registration_instance_disconnected"),
+            now,
+            json!({
+                "registered_clients": clients.len(),
+                "runner_instance": client.runner_instance_id,
+                "registered_at": client.registered_at,
+                "last_refreshed_at": client.last_seen,
+            }),
+        ),
+        (None, None) => layer_observation(
+            "not_observed",
+            None,
+            "runner_registration",
+            None,
+            Some("no_registration"),
+            now,
+            json!({"registered_clients": 0}),
+        ),
+    };
+
+    // -- project_registry ------------------------------------------------------
+    let project_registry = if registered_projects == 0 {
+        layer_observation(
+            states.project_registry,
+            None,
+            "runner_project_report",
+            None,
+            Some("no_projects_registered"),
+            now,
+            json!({"registered_projects": 0, "online_projects": 0}),
+        )
+    } else if online_projects > 0 {
+        layer_observation(
+            states.project_registry,
+            freshest_online.map(|c| c.last_seen),
+            "runner_project_report",
+            Some(RUNNER_STALE_AFTER_SECS),
+            None,
+            now,
+            json!({
+                "registered_projects": registered_projects,
+                "online_projects": online_projects,
+                "providing_instance": freshest_online.map(|c| c.runner_instance_id.clone()),
+            }),
+        )
+    } else {
+        // Projects are known but their providing runner connection is gone:
+        // a stale registration must not pretend to be callable.
+        layer_observation(
+            states.project_registry,
+            freshest.map(|c| c.last_seen),
+            "runner_project_report",
+            Some(RUNNER_STALE_AFTER_SECS),
+            Some("providing_runner_disconnected"),
+            now,
+            json!({
+                "registered_projects": registered_projects,
+                "online_projects": 0,
+            }),
+        )
+    };
+
+    // -- last_successful_tool_call: scoped meaningful activity ----------------
+    let principal = super::session_context::runtime_observation_principal(auth).ok();
+    let observation = principal
+        .as_ref()
+        .and_then(|(kind, id)| observations.latest_tool_call_for_principal(kind, id))
+        .map(|obs| (obs, "principal"))
+        .or_else(|| {
+            observations
+                .latest_tool_call()
+                .map(|obs| (obs, "any_principal"))
+        });
+    let last_successful_tool_call = match observation {
+        Some((obs, scope)) => layer_observation(
+            "observed",
+            Some(obs.observed_at),
+            "runtime_observations",
+            Some(ACTIVITY_STALE_AFTER_SECS),
+            None,
+            now,
+            json!({
+                "scope": scope,
+                "principal_kind": obs.principal_kind,
+                "project": obs.project,
+                "surface": obs.surface,
+                "session_id": obs.session_id,
+                "tool": obs.tool,
+            }),
+        ),
+        None => layer_observation(
+            "not_observed",
+            None,
+            "runtime_observations",
+            None,
+            Some("no_meaningful_tool_calls_recorded"),
+            now,
+            json!({}),
+        ),
+    };
+
+    json!({
+        "runner_process": runner_process,
+        "server_transport": server_transport,
+        "server_registration": server_registration,
+        "project_registry": project_registry,
+        "last_successful_tool_call": last_successful_tool_call,
+    })
+}
+
+/// Mixed-version diagnostics: a connected runner is not automatically
+/// capability-compatible. Reports facts about which side to upgrade without
+/// exposing paths or environment.
+fn version_compatibility(clients: &[RunnerView]) -> Value {
+    let build = crate::build_info::runtime_build_info();
+    version_compatibility_against(
+        clients,
+        env!("CARGO_PKG_VERSION"),
+        build.git_commit,
+        build.git_dirty,
+        json!(build),
+        true,
+    )
+}
+
+fn version_compatibility_against(
+    clients: &[RunnerView],
+    server_version: &str,
+    server_git_commit: Option<&str>,
+    server_git_dirty: Option<bool>,
+    server_build: Value,
+    detailed: bool,
+) -> Value {
+    let mut overall = if clients.is_empty() {
+        "no_runners"
+    } else {
+        "compatible"
+    };
+    let mut source_overall = if clients.is_empty() {
+        "no_runners"
+    } else {
+        "aligned"
+    };
+    let mut alignment_rank = if clients.is_empty() { 1 } else { 0 };
+    let mut mixed_builds_present = false;
+    let runners: Vec<Value> = clients
+        .iter()
+        .filter_map(|client| {
+            let build_version = client.build.as_ref().and_then(|b| b.version.clone());
+            let build_git_commit = client.build.as_ref().and_then(|b| b.git_commit.clone());
+            let build_git_dirty = client.build.as_ref().and_then(|b| b.git_dirty);
+            let version_matches_server = build_version
+                .as_deref()
+                .map(|version| version == server_version);
+            let git_commit_matches_server = match (build_git_commit.as_deref(), server_git_commit) {
+                (Some(runner), Some(server)) => Some(runner == server),
+                _ => None,
+            };
+            let source_matches_server = match (
+                git_commit_matches_server,
+                build_git_dirty,
+                server_git_dirty,
+            ) {
+                (Some(false), _, _) => Some(false),
+                (Some(true), Some(false), Some(false)) => Some(true),
+                (Some(true), Some(true), _) | (Some(true), _, Some(true)) => Some(false),
+                _ => None,
+            };
+            let (source_status, source_reason_code, source_action) = match source_matches_server {
+                Some(true) => ("aligned", None, None),
+                Some(false) if git_commit_matches_server == Some(false) => (
+                    "different",
+                    Some("runner_git_commit_differs_from_server"),
+                    Some("diagnostic only: normal compatible builds may differ in source revision"),
+                ),
+                Some(false) => (
+                    "different",
+                    Some("dirty_build_prevents_exact_source_alignment"),
+                    Some("diagnostic only: modified builds remain the operator responsibility"),
+                ),
+                None => (
+                    "unknown",
+                    Some("build_source_identity_incomplete"),
+                    Some("use builds that report git commit and dirty state for exact source alignment"),
+                ),
+            };
+            match (source_status, source_overall) {
+                ("different", _) => source_overall = "different",
+                ("unknown", "aligned") => source_overall = "unknown",
+                _ => {}
+            }
+
+            let protocol = runner_protocol_compatibility(client.runner_protocol_generation.get());
+            let (status, reason_code, action) = match protocol {
+                ProtocolCompatibility::Compatible => ("compatible", None, None),
+                ProtocolCompatibility::Incompatible => ("incompatible", Some("runner_protocol_generation_unsupported"), Some("use a Runner with a supported protocol generation")),
+                ProtocolCompatibility::Unknown => ("unknown", Some("runner_protocol_generation_unavailable"), Some("reconnect with an explicit supported protocol generation")),
+            };
+            if status == "incompatible" || (status == "unknown" && overall == "compatible") {
+                overall = status;
+            }
+            let alignment = build_alignment(
+                build_version.as_deref(), build_git_commit.as_deref(), build_git_dirty,
+                Some(server_version), server_git_commit, server_git_dirty,
+            );
+            use workgpt_core::desktop_runtime_contract::BuildAlignment;
+            alignment_rank = alignment_rank.max(match alignment {
+                BuildAlignment::Exact => 0,
+                BuildAlignment::Unknown => 1,
+                BuildAlignment::DifferentCommit => 2,
+                BuildAlignment::DifferentVersion => 3,
+                BuildAlignment::Dirty => 4,
+            });
+            mixed_builds_present |= version_matches_server == Some(false) || source_matches_server == Some(false);
+            if !detailed { return None; }
+            let build_built_at = client.build.as_ref().and_then(|b| b.built_at.clone());
+            let build_target = client.build.as_ref().and_then(|b| b.target.clone());
+            let build_architecture = client
+                .build
+                .as_ref()
+                .and_then(|b| b.architecture.clone());
+
+            Some(json!({
+                "client_id": client.client_id,
+                "runner_protocol_generation": client.runner_protocol_generation.get(),
+                "build_version": build_version,
+                "build_git_commit": build_git_commit,
+                "build_git_dirty": build_git_dirty,
+                "build_built_at": build_built_at,
+                "build_target": build_target,
+                "build_architecture": build_architecture,
+                "version_matches_server": version_matches_server,
+                "protocol_compatibility": protocol,
+                "build_alignment": alignment,
+                "status": status,
+                "reason_code": reason_code,
+                "action": action,
+                "source_alignment": {
+                    "status": source_status,
+                    "git_commit_matches_server": git_commit_matches_server,
+                    "source_matches_server": source_matches_server,
+                    "reason_code": source_reason_code,
+                    "action": source_action,
+                },
+            }))
+        })
+        .collect();
+    let build_alignment = [
+        "exact",
+        "unknown",
+        "different_commit",
+        "different_version",
+        "dirty",
+    ][alignment_rank];
+    if !detailed {
+        return json!({
+            "protocol_compatibility": if overall == "no_runners" { "unknown" } else { overall },
+            "build_alignment": build_alignment,
+            "source_alignment": {"status": source_overall},
+            "mixed_builds_present": mixed_builds_present
+        });
+    }
+    json!({
+        "status": overall,
+        "protocol_compatibility": if overall == "no_runners" { "unknown" } else { overall },
+        "build_alignment": build_alignment,
+        "source_alignment": {
+            "status": source_overall,
+        },
+        "server": {
+            "version": server_version,
+            "build": server_build,
+            "desktop_runtime_contract": DESKTOP_RUNTIME_CONTRACT,
+        },
+        "runners": runners,
+    })
+}
+
+fn valid_target_client_id(client_id: &str) -> bool {
+    !client_id.is_empty() && client_id.chars().count() <= TARGET_CLIENT_ID_MAX_CHARS
+}
+
+#[cfg(test)]
+pub(crate) fn version_compatibility_for_test(
+    clients: &[RunnerView],
+    server_version: &str,
+    server_git_commit: Option<&str>,
+    server_git_dirty: Option<bool>,
+) -> Value {
+    version_compatibility_against(
+        clients,
+        server_version,
+        server_git_commit,
+        server_git_dirty,
+        json!({
+            "git_commit": server_git_commit,
+            "git_dirty": server_git_dirty,
+            "built_at": null,
+            "target": null,
+            "architecture": null,
+        }),
+        true,
+    )
+}
+
+fn enabled_projects_count(client: &RunnerView) -> usize {
+    client
+        .projects
+        .iter()
+        .filter(|project| !project.disabled)
+        .count()
+}
+
+fn last_seen_age_secs(client: &RunnerView, now: i64) -> i64 {
+    now.saturating_sub(client.last_seen)
+}
+
+fn active_jobs_for_client(runner_jobs: &[ShellJobInfo], client_id: &str) -> usize {
+    runner_jobs
+        .iter()
+        .filter(|job| {
+            job.client_id == client_id
+                && workgpt_runner_registry::job_status_is_active(&job.status)
+        })
+        .count()
+}
+
+fn job_status_is_running(status: &str) -> bool {
+    matches!(
+        RunnerJobLifecycle::from_wire(status),
+        Ok(RunnerJobLifecycle::Running | RunnerJobLifecycle::StartedLegacy)
+    )
+}
+
+fn job_status_is_runner_queued(status: &str) -> bool {
+    matches!(
+        RunnerJobLifecycle::from_wire(status),
+        Ok(RunnerJobLifecycle::Queued | RunnerJobLifecycle::RunnerQueued)
+    )
+}
+
+fn job_concurrency_for_client(client: &RunnerView, runner_jobs: &[ShellJobInfo]) -> Value {
+    let mut running = 0usize;
+    let mut queued = 0usize;
+    for job in runner_jobs
+        .iter()
+        .filter(|job| job.client_id == client.client_id)
+    {
+        running += usize::from(job_status_is_running(&job.status));
+        queued += usize::from(job_status_is_runner_queued(&job.status));
+    }
+    json!({
+        "limit": client.job_concurrency_limit,
+        "running": running,
+        "queued": queued,
+    })
+}
+
+fn runner_health_summary(clients: &[RunnerView]) -> Value {
+    let online = clients.iter().filter(|client| client.connected).count();
+    let stale = clients
+        .iter()
+        .filter(|client| client.status == "stale")
+        .count();
+    let offline = clients.len().saturating_sub(online);
+    json!({
+        "count": clients.len(),
+        "online": online,
+        "offline": offline,
+        "stale": stale,
+    })
+}
+
+fn runtime_status_client_summary(
+    client: &RunnerView,
+    runner_jobs: &[ShellJobInfo],
+    now: i64,
+) -> Value {
+    // Build this projection incrementally rather than through one large `json!`
+    // expression. A current Runner carries a wide capability set plus nested
+    // policy/provider metadata, and materializing the whole object in one macro
+    // can exceed the default Tokio worker stack in debug builds.
+    let mut value = serde_json::Map::with_capacity(22);
+    value.insert("client_id".to_string(), json!(client.client_id));
+    value.insert(
+        "runner_instance_id".to_string(),
+        json!(client.runner_instance_id),
+    );
+    value.insert("display_name".to_string(), json!(client.display_name));
+    value.insert("owner".to_string(), json!(client.owner));
+    value.insert("status".to_string(), json!(client.status));
+    value.insert(
+        "host_context".to_string(),
+        host_context_projection(client.host_context.as_ref()),
+    );
+    value.insert("connected".to_string(), json!(client.connected));
+    value.insert(
+        "runner_protocol_generation".to_string(),
+        json!(client.runner_protocol_generation.get()),
+    );
+    value.insert("transport".to_string(), json!(client.transport));
+    value.insert("last_seen".to_string(), json!(client.last_seen));
+    value.insert(
+        "last_seen_age_secs".to_string(),
+        json!(last_seen_age_secs(client, now)),
+    );
+    value.insert(
+        "pending_requests".to_string(),
+        json!(client.pending_requests),
+    );
+    value.insert(
+        "active_jobs".to_string(),
+        json!(active_jobs_for_client(runner_jobs, &client.client_id)),
+    );
+    value.insert(
+        "job_concurrency".to_string(),
+        job_concurrency_for_client(client, runner_jobs),
+    );
+    value.insert("build".to_string(), json!(client.build));
+    value.insert("capabilities".to_string(), json!(client.capabilities));
+    value.insert(
+        "coding_agent_providers".to_string(),
+        json!(safe_provider_inventory(
+            client.coding_agent_providers.as_deref()
+        )),
+    );
+    value.insert(
+        "projects_count".to_string(),
+        json!(enabled_projects_count(client)),
+    );
+    value.insert(
+        "project_inventory".to_string(),
+        json!(client.project_inventory),
+    );
+    value.insert(
+        "policy".to_string(),
+        sanitized_policy_summary(client.policy.as_ref()),
+    );
+    value.insert(
+        "shell_profiles".to_string(),
+        sanitized_shell_profiles_summary(
+            client
+                .policy
+                .as_ref()
+                .and_then(|policy| policy.shell_profiles.as_ref()),
+        ),
+    );
+    value.insert(
+        "tool_providers".to_string(),
+        json!(client
+            .policy
+            .as_ref()
+            .and_then(|policy| policy.tool_providers.as_ref())),
+    );
+    Value::Object(value)
+}
+
+fn runtime_status_runners_summary(
+    count: usize,
+    online_count: usize,
+    stale_count: usize,
+    clients: Vec<Value>,
+    health_summary: Value,
+) -> Value {
+    let mut value = serde_json::Map::with_capacity(5);
+    value.insert("count".to_string(), json!(count));
+    value.insert("online_count".to_string(), json!(online_count));
+    value.insert("stale_count".to_string(), json!(stale_count));
+    value.insert("clients".to_string(), Value::Array(clients));
+    value.insert("summary".to_string(), health_summary);
+    Value::Object(value)
+}
+
+/// Build the sanitized policy summary JSON exposed in `runtime_status` and
+/// `list_runners`. Only the safe fields are carried: `allow_raw_shell`,
+/// `allow_cwd_anywhere`, `allowed_roots`, `max_timeout_secs`,
+/// `max_output_bytes`. The agent token, shell env values, init_script
+/// contents, and full Runner config contents are NEVER included. Older agents
+/// that registered without a policy produce `Value::Null` so the field is
+/// present-but-null for clients that expect it.
+fn sanitized_policy_summary(policy: Option<&crate::runner_protocol::RunnerPolicySummary>) -> Value {
+    match policy {
+        Some(p) => json!({
+            "allow_raw_shell": p.allow_raw_shell,
+            "allow_cwd_anywhere": p.allow_cwd_anywhere,
+            "allowed_roots": p.allowed_roots,
+            "max_timeout_secs": p.max_timeout_secs,
+            "max_output_bytes": p.max_output_bytes,
+        }),
+        None => Value::Null,
+    }
+}
+
+/// Build the sanitized shell-profiles summary JSON exposed in
+/// `runtime_status`, `list_runners`, and `list_projects`. Only safe metadata is
+/// carried: default profile name, configured count, prepared-cache count, and
+/// per-profile name / has_init_script (boolean) / env_keys_count / program /
+/// args_count. NEVER includes init_script bodies, env values, tokens, or the
+/// full env snapshot. Older agents that did not report a summary produce
+/// `Value::Null`.
+fn sanitized_shell_profiles_summary(
+    summary: Option<&crate::runner_protocol::ShellProfilesSummary>,
+) -> Value {
+    match summary {
+        Some(s) => {
+            let profiles: Vec<Value> = s
+                .profiles
+                .iter()
+                .map(|p| {
+                    json!({
+                        "name": p.name,
+                        "has_init_script": p.has_init_script,
+                        "env_keys_count": p.env_keys_count,
+                        "program": p.program,
+                        "args_count": p.args_count,
+                        "dialect": p.dialect,
+                    })
+                })
+                .collect();
+            json!({
+                "default_profile": s.default_profile,
+                "configured_count": s.configured_count,
+                "prepared_cache_count": s.prepared_cache_count,
+                "profiles": profiles,
+                "default_dialect": s.default_dialect,
+                "available_dialects": s.available_dialects,
+            })
+        }
+        None => Value::Null,
+    }
+}
+
+impl Default for RuntimeInfo {
+    fn default() -> Self {
+        Self {
+            auth_enabled: false,
+            shared_key_configured: false,
+            shared_key_enabled: false,
+            shared_key_remote_enabled: false,
+            configured_public_url: None,
+            oauth2_enabled: false,
+            oauth2_shared_key_bridge_enabled: false,
+            quic: Some(std::sync::Arc::new(std::sync::Mutex::new(
+                crate::config::QuicServerConfig::default().runtime_status(),
+            ))),
+            // Product defaults without touching process-global environment:
+            // compact schemas and MCP Apps are on by default, while duplicate
+            // text-JSON compatibility remains opt-in.
+            mcp_compact_schemas: true,
+            mcp_apps_enabled: true,
+            mcp_text_json_compat_enabled: false,
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "tests/runtime_info.rs"]
+mod tests;

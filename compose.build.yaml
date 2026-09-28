@@ -1,0 +1,13 @@
+services:
+  workgpt:
+    # Explicit developer/source-build override. The default compose.yaml consumes
+    # the published GHCR image instead of compiling Rust on the deployment host.
+    image: workgpt-server-local:${WORKGPT_IMAGE_TAG:-latest}
+    pull_policy: build
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        WORKGPT_GIT_COMMIT: ${WORKGPT_GIT_COMMIT:-}
+        WORKGPT_GIT_DIRTY: ${WORKGPT_GIT_DIRTY:-}
+        WORKGPT_BUILT_AT: ${WORKGPT_BUILT_AT:-}

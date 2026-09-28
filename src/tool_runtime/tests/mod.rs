@@ -1,0 +1,80 @@
+//! Domain-organized test modules for tool_runtime.
+
+mod support;
+
+mod agent_continuation_refs;
+mod agent_task_attempt_refs;
+mod agent_tasks;
+mod agent_waits;
+mod apply_text_edits;
+mod artifact_transfer;
+mod assignment_fence;
+mod builtin_coding_workflow;
+#[cfg(feature = "workspace-checkpoints")]
+mod checkpoint;
+#[cfg(feature = "experimental-code-mode")]
+mod code_mode;
+#[cfg(feature = "experimental-code-mode")]
+mod code_mode_e2b;
+mod coding_agent_discovery;
+mod coding_task;
+mod coding_task_semantic_navigation;
+mod collaboration;
+mod computer_budgets;
+mod context_projection;
+mod continuation_feedback;
+mod control_sidecars;
+mod current_window_activity;
+mod diagnostics;
+mod dispatch;
+mod edit_tool_telemetry;
+mod execution_context;
+mod files;
+mod files_helpers;
+mod git;
+mod goals;
+mod handoff;
+mod handoff_brief;
+mod hygiene;
+mod job_attention;
+mod job_continuation;
+mod job_terminal_wait;
+mod jobs;
+mod lsp;
+mod memory;
+mod metadata;
+mod observe_jobs;
+mod peer_collaboration;
+mod permission_gate;
+mod process;
+mod project_references;
+mod read_files;
+mod reconnect;
+mod runner_fixtures;
+mod schema;
+mod script;
+mod search_and_read;
+mod search_project_texts;
+mod session_shells;
+mod sessions;
+mod sessions_git;
+mod sessions_guards;
+mod sessions_instructions;
+mod sessions_resolver;
+mod skills;
+mod specialized_dispatch;
+mod startup_brief;
+mod startup_catalog;
+mod sync_timeout;
+mod targeted_inventory;
+mod trusted_smoke;
+mod unified_diff;
+mod validation_events;
+mod validation_handoff;
+mod validation_identity;
+mod validation_summary;
+mod work_on_project;
+mod work_result;
+mod write_project_file;
+
+mod external_observations;

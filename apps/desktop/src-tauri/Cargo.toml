@@ -1,0 +1,55 @@
+[package]
+name = "workgpt-desktop"
+version = "0.4.3"
+description = "WorkGPT Desktop runtime and setup control surface"
+edition = "2021"
+publish = false
+
+# Keep Tauri/WebView dependencies out of the root WorkGPT Cargo workspace.
+[workspace]
+
+[lib]
+name = "workgpt_desktop_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+semver = "1"
+sha2 = "0.10"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "system-proxy"] }
+toml_edit = "0.25"
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
+tokio = { version = "1", features = ["fs", "io-util", "macros", "process", "rt-multi-thread", "sync", "time"] }
+url = "2"
+uuid = { version = "1", features = ["v4"] }
+workgpt-core = { path = "../../../crates/workgpt-core" }
+workgpt-environment = { path = "../../../crates/workgpt-environment" }
+workgpt-process = { path = "../../../crates/workgpt-process" }
+workgpt-runner-config = { path = "../../../crates/workgpt-runner-config" }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+system-configuration = "0.7"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Storage_FileSystem", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+winreg = "0.55"
+
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.dogfood]
+inherits = "dev"
+opt-level = 1
+debug = 1

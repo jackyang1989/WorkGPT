@@ -1,0 +1,34 @@
+name: workgpt
+
+services:
+  workgpt:
+    image: ${WORKGPT_SERVER_IMAGE:-ghcr.io/jackyang1989/WorkGPT-server:latest}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      WORKGPT_TOKEN: ${WORKGPT_TOKEN:?set WORKGPT_TOKEN in .env}
+      WORKGPT_ADDR: 0.0.0.0:8080
+      WORKGPT_DATA: /var/lib/workgpt
+      WORKGPT_PUBLIC_URL: ${WORKGPT_PUBLIC_URL:?set WORKGPT_PUBLIC_URL in .env}
+      RUST_LOG: ${RUST_LOG:-info}
+    ports:
+      # Only the existing reverse proxy on this host should reach WorkGPT.
+      - "${WORKGPT_HOST_IP:-127.0.0.1}:${WORKGPT_HOST_PORT:-8080}:8080"
+    volumes:
+      - workgpt_data:/var/lib/workgpt
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+
+volumes:
+  workgpt_data:
